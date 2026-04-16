@@ -170,6 +170,21 @@ int getMaxDays(unsigned int month, unsigned int year) {
  */
 void clearscreen() {  cout << "\033[2J\033[1;1H"; }
 
+/**
+ * @brief Clears a specified number of lines from the console output.
+ * 
+ * @param n The number of lines to clear from the console.
+ * @details
+ * This function uses ANSI escape codes to move the cursor up and clear lines in the terminal. It iterates 'n' times, moving the cursor up one line and clearing that line each time. This is useful for removing previous output from the console, such as error messages or prompts, without clearing the entire screen. The function does not return any value and is intended to be used in scenarios where you want to update the console output dynamically while keeping the user interface clean.
+ * 
+ * @note In environments that do not support ANSI escape codes, this function may not work as intended. It is designed for use in modern terminal environments that support ANSI codes.
+ */
+void clearLines(int n) {
+    for (int i = 0; i < n; ++i) {
+        cout << "\033[1A\033[2K"; // Move cursor up and clear line
+    }
+}
+
 // --- Colored Output Functions ---
 
 /**
@@ -497,8 +512,7 @@ void makeReservation() {
         
         // --- Input Section ---
         cout << "\nCustomer Name: ";
-        cin.ignore();
-        getline(cin, name);
+        getline(cin >> ws, name);
         if (name == "0") return;
 
         // --- Name Validation ---
@@ -509,8 +523,19 @@ void makeReservation() {
         }
 
         // --- 1. Year Validation ---
-        cout << "Year (YYYY): "; cin >> y;
-        if (y == 0) return;
+        cout << "Year (YYYY): "; 
+
+        while (!(cin >> y) || cin.peek() != '\n') { 
+            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            ERROR("Numeric only! Enter year (e.g., 2026)");
+            cout << "Press Enter to try again...";
+            cin.get(); // Wait for user to press Enter
+            clearLines(3); // Clear the error message and prompt
+            cout << "Year (YYYY): ";
+        }
+
+        if (y == 0) return; //Allow user to cancel by entering '0' for year.
+
         if (y < currentYear) {
             ERROR("Invalid Year: Past years are not allowed.");
             cout << "Press Enter to try again..."; cin.ignore(); cin.get();
@@ -518,23 +543,31 @@ void makeReservation() {
         }
         
         // --- 2. Month Validation (Fixed the bug here) ---
-        cout << "Month (1-12): "; cin >> m;
-        if (m == 0) return;
-        if (m < 1 || m > 12) {
-            ERROR("Invalid Month: Please enter a value between 1 and 12.");
-            cout << "Press Enter to try again..."; cin.ignore(); cin.get();
-            continue;
+        cout << "Month (1-12): "; 
+        while (!(cin >> m) || m < 0 || m > 12 || cin.peek() != '\n' ) { 
+            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); 
+            ERROR("Invalid! Enter month (1-12)");
+            cout << "Press Enter to try again...";
+            cin.get(); // Wait for user to press Enter
+            clearLines(3); // Clear the error message and prompt
+            cout << "Month (1-12): ";
         }
+        
+        if (m == 0) return; // Allow user to cancel by entering '0' for month as well.
 
         // --- 3. Day Validation ---
         int maxDays = getMaxDays(m, y); ///< Calculates the maximum number of days for the given month and year, accounting for leap years.
-        cout << "Day (1-" << maxDays << "): "; cin >> d;
-        if (d == 0) return;
-        if (d < 1 || d > maxDays) {
-            ERROR("Invalid Day: This month only has " + to_string(maxDays) + " days.");
-            cout << "Press Enter to try again..."; cin.ignore(); cin.get();
-            continue;
+        cout << "Day (1-" << maxDays << "): "; 
+        while (!(cin >> d) || d < 0 || d > maxDays || cin.peek() != '\n') { 
+            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); 
+            ERROR("Invalid! Enter valid day for this month");
+            cout << "Press Enter to try again...";
+            cin.get(); // Wait for user to press Enter
+            clearLines(3); // Clear the error message and prompt
+            cout << "Day (1-" << maxDays << "): ";
         }
+
+        if (d == 0) return; // Allow user to cancel by entering '0' for day as well.
 
         // --- 4. Past Date Check (Full Date) ---
         if (y == currentYear && (m < currentMonth || (m == currentMonth && d < currentDay))) {
@@ -567,7 +600,17 @@ void makeReservation() {
         cout << "1. Basic   (P" << PRICE_BASIC << "/head)\n";
         cout << "2. Premium (P" << PRICE_PREMIUM << "/head)\n";
         cout << "3. Luxury  (P" << PRICE_LUXURY << "/head)\n";
-        cout << "Select Package: "; cin >> pkg;
+        cout << "Select Package: "; 
+        
+        while (!(cin >> pkg) || pkg < 0 || pkg > 3 || cin.peek() != '\n') {
+            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            ERROR("Invalid! Select package 1, 2, or 3");
+            cout << "Press Enter to try again...";
+            cin.get(); // Wait for user to press Enter
+            clearLines(3); // Clear the error message and prompt
+            cout << "Select Package: ";
+        }
+
         if (pkg == 0) return;
         if (pkg < 1 || pkg > 3) {
             ERROR("Invalid Package selection.");
@@ -575,7 +618,15 @@ void makeReservation() {
             continue;
         }
         
-        cout << "Number of Guests: "; cin >> guests;
+        cout << "Number of Guests: "; 
+        while(!(cin >> guests) || guests < 0 || cin.peek() != '\n') {
+            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            ERROR("Numeric only! Enter number of guests");
+            cout << "Press Enter to try again...";
+            cin.get(); // Wait for user to press Enter
+            clearLines(3); // Clear the error message and prompt
+            cout << "Number of Guests: ";
+        }
         if (guests == 0) return;
         
         // Validation for Guest Limits
@@ -722,18 +773,36 @@ void manageReservations() {
         else if (cmd == "r" || cmd == "R") { ascending = !ascending; currentPage = 0; }
         else if (cmd == "s" || cmd == "S") {
             cout << "Enter Search Query: ";
-            cin.ignore(); getline(cin, searchQuery);
+            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // CLEAR THE BUFFER HERE
+            getline(cin, searchQuery);
             currentPage = 0;
         }
-        // Add this inside the command section of manageReservations
+        // Finish Event Action
         else if (cmd == "f" || cmd == "F") {
-            int fid; ///< Temporary variable to hold the reservation ID entered by the user for marking an event as completed. This variable is used to identify which reservation the user wants to update, and it is validated to ensure that it corresponds to an existing reservation with a status of "Confirmed" before allowing the status change to "Completed".
-            cout << "Enter ID to mark as COMPLETED: ";
-            if (!(cin >> fid)) {
-                ERROR("Invalid ID."); cin.clear(); cin.ignore(100, '\n');
-            } else {
+            int fid; ///< Temporary variable to hold the reservation ID entered by the user for marking as completed. This variable is used to identify which reservation the user wants to mark as completed, and it is validated to ensure that it corresponds to an existing reservation before allowing the status change to "Completed". The function checks if the reservation is currently confirmed and provides appropriate feedback to the user based on whether the status change was successful or if the specified ID was not found or cannot be marked as completed.
+            
+            while(true) {
+                cout << "Enter ID to mark as COMPLETED (Enter '0' to cancel): ";
+                
+                // Validate that it's actually a number
+                if (!(cin >> fid) || cin.peek() != '\n') {
+                    cin.clear();
+                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                    ERROR("Invalid ID format. Numeric only.");
+                    cout << "Press Enter to try again...";
+                    cin.get();
+                    clearLines(3);
+                    continue; // Prompt again after handling the invalid input
+                }
+
+                if (fid == 0) break; // Allow user to cancel by entering '0' for ID.
+
+                bool found = false; ///< Flag to indicate whether the reservation with the specified ID was found in the reservation list. This variable is used to track whether a matching reservation was located during the search process, allowing the function to provide appropriate feedback to the user (e.g., confirming completion or displaying an error message if the ID is not found).
+
+                /// Search for the reservation by ID
                 for(auto& r : reservationList) {
                     if(r.getId() == fid) {
+                        found = true;
                         if(r.getStatus() == "Confirmed") {
                             r.setStatus(COMPLETED);
                             saveToFile();
@@ -744,17 +813,44 @@ void manageReservations() {
                         break;
                     }
                 }
+
+                // If not found, show error message
+                if(!found) ERROR("ID " + to_string(fid) + " not found.");
+                cout << "Press Enter to continue...";
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cin.get();
+                clearLines(3); // Clear the error message and prompts before asking again
+                continue; // Prompt again after handling the input
             }
-            cin.ignore(); cin.get();
+            
+            
+           
+
+           
         }
         // --- Cancel Action ---
         else if (cmd == "c" || cmd == "C") {
-            int cid; ///< Temporary variable to hold the reservation ID entered by the user for cancellation. This variable is used to identify which reservation the user wants to cancel, and it is validated to ensure that it corresponds to an existing reservation before allowing the status change to "Cancelled". The function also checks if the reservation is already cancelled to prevent redundant updates.
-            cout << "Enter ID to Cancel: ";
-            if (!(cin >> cid)) {
-                ERROR("Invalid ID format."); cin.clear(); cin.ignore(100, '\n');
-            } else {
-                bool found = false;
+            int cid; ///< Temporary variable to hold the reservation ID entered by the user for cancellation. This variable is used to identify which reservation the user wants to cancel, and it is validated to ensure that it corresponds to an existing reservation before allowing the status change to "Cancelled". The function checks if the reservation is already cancelled and provides appropriate feedback to the user.
+            
+            while(true){
+                cout << "Enter ID to Cancel (Enter '0' to cancel): ";
+
+                // Validate that it's actually a number
+                if (!(cin >> cid) || cin.peek() != '\n') {
+                    cin.clear();
+                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                    ERROR("Numeric only! Enter ID: ");
+                    cout << "Press Enter to try again...";
+                    cin.get();
+                    clearLines(3); // Clears the prompt, error, and "Press Enter" lines
+                    continue;
+                }
+
+                if (cid == 0) break; // Allow user to cancel by entering '0' for ID.
+
+                bool found = false; ///< Flag to indicate whether the reservation with the specified ID was found in the reservation list. This variable is used to track whether a matching reservation was located during the search process, allowing the function to provide appropriate feedback to the user (e.g., confirming cancellation or displaying an error message if the ID is not found).
+                
+                // Search for the reservation by ID
                 for(auto& r : reservationList) {
                     if(r.getId() == cid) {
                         found = true;
@@ -768,29 +864,75 @@ void manageReservations() {
                         break;
                     }
                 }
-                if(!found) ERROR("ID not found.");
-            }
-            cin.ignore(); cin.get();
+                
+                // If not found, show error message and prompt again
+                if(!found) ERROR("ID " + to_string(cid) + " not found in database.");
+                
+                // After handling the input, prompt again for cancellation or allow exit with '0' to go back to the normal mode.
+                cout << "Press Enter to continue...";
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cin.get();
+                clearLines(3); // Clear the error message and prompts before asking again
+                continue; // Prompt again after handling the input
+            } 
         }
+
         // --- Delete Action ---
         else if (cmd == "d" || cmd == "D") {
-            int did; ///< Temporary variable to hold the reservation ID entered by the user for deletion. This variable is used to identify which reservation the user wants to delete from the reservation list. The function validates that the entered ID corresponds to an existing reservation before removing it from the list and saving the changes to the file. If the ID is not found, an error message is displayed.
-            cout << "Enter ID to DELETE: ";
-            if (!(cin >> did)) {
-                ERROR("Invalid ID format."); cin.clear(); cin.ignore(100, '\n');
-            } else {
+            int did; ///< Temporary variable to hold the reservation ID entered by the user for deletion. This variable is used to identify which reservation the user wants to delete, and it is validated to ensure that it corresponds to an existing reservation before allowing the deletion. The function includes a confirmation step to prevent accidental deletions, and it provides feedback to the user based on whether the deletion was successful or if the specified ID was not found.
+            
+            while(true) {
+                cout << "Enter ID to DELETE (Enter '0' to cancel): ";
+
+                if (!(cin >> did) || cin.peek() != '\n') {
+                    cin.clear();
+                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                    ERROR("Numeric only! Enter ID to DELETE: ");
+                    cout << "Press Enter to try again...";
+                    cin.get();
+                    clearLines(3);
+                    continue;
+                }
+
+                if (did == 0) continue; // Allow user to cancel by entering '0' for ID.
+
+                // Find the reservation by ID
                 auto it = find_if(reservationList.begin(), reservationList.end(), [&](const Reservation& r) {
                     return r.getId() == did;
                 });
+
+                // if found, confirm deletion and delete or show error if not found
                 if (it != reservationList.end()) {
-                    reservationList.erase(it);
-                    saveToFile();
-                    SUCCESS("ID " + to_string(did) + " deleted from database.");
+                    char confirm;
+                    WARNING("Are you sure you want to PERMANENTLY delete ID " + to_string(did) + "? (y/n): ");
+                    cin >> confirm;
+
+                    if (tolower(confirm) == 'y') {
+                        reservationList.erase(it);
+                        saveToFile();
+                        SUCCESS("ID " + to_string(did) + " deleted from database.");
+                        
+                    } else {
+                        INFO("Deletion cancelled.");
+                        // After handling the input, prompt again for deletion or allow exit with '0' to go back to the normal mode.
+                        cout << "Press Enter to continue...";
+                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        cin.get();
+                        clearLines(5); // Clear the error message and prompts before asking again.
+                        continue; // Prompt again after handling the input
+                    }
                 } else {
-                    ERROR("ID not found.");
+                    ERROR("ID " + to_string(did) + " not found.");
                 }
+                
+                // After handling the input, prompt again for deletion or allow exit with '0' to go back to the normal mode.
+                cout << "Press Enter to continue...";
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                cin.get();
+                clearLines(3); // Clear the error message and prompts before asking again.
+                continue; // Prompt again after handling the input
             }
-            cin.ignore(); cin.get();
+            
         }
     }
 }
