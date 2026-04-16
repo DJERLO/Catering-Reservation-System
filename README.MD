@@ -35,61 +35,69 @@ This program lets users create and manage catering reservations through a menu-d
   - Data is saved to `reservations.csv`
   - Existing reservations are loaded automatically at startup
 
-## � Variables Dictionary
+## 📘 Variables Dictionary
 
-| Variable | Type | Description |
+| Variable / Symbol | Type | Description |
 | --- | --- | --- |
-| `MAX_EVENTS_PER_DAY` | `int` | Maximum number of events allowed per date (3) |
-| `MAX_TOTAL_GUESTS` | `int` | Maximum total guests allowed per date (250) |
-| `MIN_GUESTS_PER_EVENT` | `int` | Minimum guests required per reservation (10) |
-| `PRICE_BASIC` | `double` | Cost per guest for the Basic package (P250) |
-| `PRICE_PREMIUM` | `double` | Cost per guest for the Premium package (P450) |
-| `PRICE_LUXURY` | `double` | Cost per guest for the Luxury package (P600) |
-| `PackageType` | `enum` | Package tier options: BASIC, PREMIUM, LUXURY |
-| `ReservationStatus` | `enum` | Reservation lifecycle states: CONFIRMED, COMPLETED, CANCELLED |
-| `MenuOption` | `enum` | Main menu actions: MAKE_RESERVATION, MANAGE_RESERVATIONS, EXIT |
+| `MAX_EVENTS_PER_DAY` | `int` | Maximum bookings allowed per date (3). |
+| `MAX_TOTAL_GUESTS` | `int` | Maximum total guests allowed per date (250). |
+| `MIN_GUESTS_PER_EVENT` | `int` | Minimum guests required per reservation (10). |
+| `PRICE_BASIC` | `double` | Cost per guest for the Basic package (P250). |
+| `PRICE_PREMIUM` | `double` | Cost per guest for the Premium package (P450). |
+| `PRICE_LUXURY` | `double` | Cost per guest for the Luxury package (P600). |
+| `PackageType` | `enum` | Package tiers: `BASIC`, `PREMIUM`, `LUXURY`. |
+| `ReservationStatus` | `enum` | Reservation states: `CONFIRMED`, `COMPLETED`, `CANCELLED`. |
+| `MenuOption` | `enum` | Main menu options: `MAKE_RESERVATION`, `MANAGE_RESERVATIONS`, `EXIT`. |
+| `Color` | `enum` | ANSI text color codes used for terminal feedback. |
+| `reservationList` | `vector<Reservation>` | In-memory list of all reservations. |
+| `currentPage` | `int` | Current page index in the reservation management view. |
+| `itemsPerPage` | `const int` | Number of reservations shown per page (10). |
+| `searchQuery` | `string` | Current search filter used in reservation management. |
+
 ## 🏷️ Class Summary
 
 | Class | Description |
 | --- | --- |
-| `Reservation` | Represents a catering reservation and stores details such as customer name, date, package type, guest count, total cost, and status. |
+| `Reservation` | Represents a catering reservation, including customer data, event date, package selection, guest count, total cost, and status. |
 
 ### `Reservation` Methods
 
 | Method | Return Type | Description |
 | --- | --- | --- |
-| `Reservation(int id, string name, int y, int m, int d, int pkg, int g)` | `Reservation` | Creates a reservation and calculates total cost. |
-| `calculateTotal()` | `void` | Computes total cost using package pricing and guest count. |
-| `getName()` | `string` | Returns customer name. |
-| `getPackage()` | `int` | Returns selected package type. |
-| `getGuests()` | `int` | Returns guest count. |
-| `getTotal()` | `double` | Returns total reservation cost. |
-| `getId()` | `int` | Returns reservation ID. |
-| `getYear()` | `int` | Returns event year. |
-| `getMonth()` | `int` | Returns event month. |
-| `getDay()` | `int` | Returns event day. |
-| `getStatus()` | `string` | Returns reservation status as text. |
-| `setStatus(ReservationStatus newStatus)` | `void` | Updates reservation status. |
-| `showReservation()` | `void` | Prints reservation details in table format. |
+| `Reservation(int resId, string name, int y, int m, int d, int pkg, int g)` | Constructor | Creates a reservation and calculates its total cost. |
+| `calculateTotal()` | `void` | Computes the total reservation cost based on package rate and guest count. |
+| `getName()` | `string` | Returns the customer's name. |
+| `getPackage()` | `int` | Returns the package type value. |
+| `getGuests()` | `int` | Returns the number of guests. |
+| `getTotal()` | `double` | Returns the total cost. |
+| `getId()` | `int` | Returns the reservation ID. |
+| `getYear()` | `int` | Returns the event year. |
+| `getMonth()` | `int` | Returns the event month. |
+| `getDay()` | `int` | Returns the event day. |
+| `getStatus()` | `string` | Returns the reservation status as a human-readable string. |
+| `setStatus(ReservationStatus newStatus)` | `void` | Updates the reservation status. |
+| `showReservation()` | `void` | Prints the reservation details in a formatted table row. |
 
 ## 🔧 Function Summary
 
 | Function | Return Type | Description |
 | --- | --- | --- |
 | `isLeapYear(unsigned int year)` | `bool` | Checks if a year is a leap year. |
-| `getMaxDays(unsigned int month, unsigned int year)` | `int` | Returns days in a month, accounting for leap years. |
-| `clearscreen()` | `void` | Clears the terminal display with ANSI codes. |
+| `getMaxDays(unsigned int month, unsigned int year)` | `int` | Returns the number of days in a given month, accounting for leap years. |
+| `clearscreen()` | `void` | Clears the terminal screen using ANSI escape codes. |
+| `clearLines(int n)` | `void` | Clears the last `n` console lines with ANSI codes. |
 | `SUCCESS(string message)` | `void` | Displays a green success message. |
-| `INFO(string message)` | `void` | Displays an informational message. |
+| `INFO(string message)` | `void` | Displays a blue informational message. |
 | `WARNING(string message)` | `void` | Displays a yellow warning message. |
 | `ERROR(string message)` | `void` | Displays a red error message. |
-| `saveToFile()` | `void` | Writes reservations to `reservations.csv`. |
-| `loadFromFile()` | `void` | Reads reservations from `reservations.csv`. |
-| `displayMenu()` | `void` | Prints the main menu options. |
-| `makeReservation()` | `void` | Collects user input and creates a new reservation. |
-| `manageReservations()` | `void` | Shows reservation list and allows status updates, search, paging, and deletion. |
-| `main()` | `int` | Program entry point; loads data and runs the main menu loop. |
-## �📁 Files
+| `saveToFile()` | `void` | Saves the current reservation list to `reservations.csv`. |
+| `loadFromFile()` | `void` | Loads reservations from `reservations.csv` into memory. |
+| `displayMenu()` | `void` | Prints the main menu options to the console. |
+| `makeReservation()` | `void` | Handles user input and validation to create a new reservation. |
+| `manageReservations()` | `void` | Allows searching, pagination, status updates, cancellations, and deletion of reservations. |
+| `main()` | `int` | Program entry point; initializes data and runs the main menu loop. |
+
+## 📁 Files
 
 - `main.cpp` — main application source code
 - `reservations.csv` — stored reservation data (generated on save)
