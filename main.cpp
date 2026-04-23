@@ -30,7 +30,8 @@
 #include <string>
 #include <sstream>
 #include <vector>
-
+#include <limits>
+#include <locale>
 using namespace std;
 
 // ==========================================================
@@ -103,6 +104,7 @@ enum ReservationStatus {
 enum MenuOption { 
     MAKE_RESERVATION = 1,  ///< Create a new reservation
     MANAGE_RESERVATIONS,   ///< View or modify existing reservations
+    SALES_REPORT,
     EXIT                   ///< Exit the application
 };
 
@@ -316,19 +318,40 @@ public:
     int getDay() const { return day; } ///< Returns the day of the event.
     
     /**
-     * @brief Returns the current status of the reservation as a string.
-     * @details
-     * The function checks the reservation's status field, which is of type ReservationStatus, and returns a corresponding string representation. The possible return values are "Confirmed", "Completed", "Cancelled", or "Unknown" if the status does not match any of the defined enum values. This function is useful for displaying the reservation status in a human-readable format when showing reservation details to the user.
-     * @note The function relies on the status field being correctly set to one of the defined ReservationStatus enum values. If the status field contains an invalid value, the function will return "Unknown". It is important to ensure that the status is properly managed throughout the reservation lifecycle to maintain accurate status reporting.
+     * @brief Formats the customer name to fit within a specific UI column width.
+     * * @details 
+     * To prevent table misalignment in the dashboard, this method checks the length 
+     * of the customer's name. If the name exceeds the provided width, it truncates 
+     * the string and appends an ellipsis (...) to indicate that the text continues.
+     * * @param width The maximum number of characters allowed for the column.
+     * @return A string containing either the full name or a truncated version ending in "...".
+     * * @example 
+     * If customerName is "Mark Anthony Garcia" and width is 15, 
+     * the output will be "Mark Anthony...".
      */
-    string getStatus() const { 
-        switch (status) {
-            case CONFIRMED: return "Confirmed"; 
+    string getTruncatedCustomerName(size_t width) const {
+        if (customerName.length() > width) {
+            // Substring to width-3 and add "..."
+            return customerName.substr(0, width - 3) + "...";
+        }
+        return customerName;
+    }
+
+    int getStatus() const { return status;}
+    
+    /**
+     * @brief Converts a ReservationStatus enum to a human-readable string.
+     * @param status The status to convert.
+     * @return A string representation ("Confirmed", "Completed", etc.)
+     */
+    string getStatusString(int status) const {
+        switch(status) {
+            case CONFIRMED: return "Confirmed";
             case COMPLETED: return "Completed";
             case CANCELLED: return "Cancelled";
-            default: return "Unknown";
+            default:        return "Unknown";
         }
-    } 
+    }
     
     // Setters
     /**
@@ -351,12 +374,34 @@ public:
      * @return void
      */
     void showReservation() const {
+        ostringstream date;
+        date << year << "-" 
+               << setfill('0') << setw(2) << month << "-" 
+               << setfill('0') << setw(2) << day;
+        cout.imbue(locale::classic());
         cout << left << setw(6) << id 
-             << setw(18) << customerName 
-             << setw(15) << (to_string(year) + "-" + to_string(month) + "-" + to_string(day))
+             << setw(18) << getTruncatedCustomerName(18) 
+             << setw(15) << date.str()
              << setw(8) << guests 
-             << setw(12) << getStatus() // Display status as string
-             << "P" << fixed << setprecision(2) << totalCost << endl;
+             << setw(12) << getStatusString(getStatus()); // Display status as string
+        cout.imbue(locale("en_US.UTF-8")); // Sets formatting to use commas
+        cout << "P" << fixed << setprecision(2) << totalCost << endl;
+        cout.imbue(locale::classic());
+    }
+
+    /**
+     * @brief Checks if the reservation date is strictly before a given reference date.
+     * * @param currentYear The year to compare against (YYYY).
+     * @param currentMonth The month to compare against (1-12).
+     * @param currentDay The day to compare against (1-31).
+     * @return true if the reservation date has passed relative to the parameters.
+     * @return false if the reservation date is today or in the future.
+     */
+    bool isPastDate(int currentYear, int currentMonth, int currentDay) const {
+        if (year < currentYear) return true;
+        if (year == currentYear && month < currentMonth) return true;
+        if (year == currentYear && month == currentMonth && day < currentDay) return true;
+        return false;
     }
     
 };
@@ -406,7 +451,7 @@ void saveToFile() {
                 << res.getDay() << ","
                 << res.getPackage() << ","
                 << res.getGuests() << ","
-                << res.getStatus() << endl;
+                << res.getStatusString(res.getStatus()) << endl;
     }
     outFile.close();
 }
@@ -429,6 +474,7 @@ void loadFromFile() {
 
     reservationList.clear();
     string line; ///< Temporary variable to hold each line read from the CSV file. This variable is used in the while loop to read the file line by line. Each line is expected to contain the reservation data in a comma-separated format, which will be parsed to create Reservation objects. If a line is malformed or cannot be parsed correctly, it will be skipped, and the function will continue reading the next line until the end of the file is reached.
+    getline(inFile, line); // Skip the header row
     while (getline(inFile, line)) {
         stringstream ss(line); 
         string temp, name, status; ///< Temporary variables for parsing reservation data from the CSV file. The 'temp' variable is used for intermediate string storage when parsing integer values, while 'name' and 'status' are used to store the customer's name and reservation status as strings. The 'id', 'y', 'm', 'd', 'pkg', and 'guests' variables are used to hold the parsed integer values for the reservation's ID, year, month, day, package type, and number of guests, respectively. These variables are essential for creating a Reservation object after successfully parsing a line from the CSV file.
@@ -449,25 +495,79 @@ void loadFromFile() {
             Reservation res(id, name, y, m, d, pkg, guests);
             res.setStatus(static_cast<ReservationStatus>(statusInt));
             reservationList.push_back(res);
-        } catch (...) { continue; }
+        } catch (const exception& e) { continue; }
     }
     inFile.close();
 }
 //--- End of File I/O Functions ---
 
-// --- UI Functions ---
 /**
- * @brief Displays the main menu of the Catering Reservation System.
+ * @brief Automatically marks past confirmed reservations as completed.
  *
  * @details
- * The menu provides three options:
- * 1. New Reservation - Allows the user to create a new reservation.
- * 2. Manage & View Reservations - Provides an interface to view and manage existing reservations.
- * 3. Exit System - Exits the application.
+ * This function checks all reservations stored in the reservation list
+ * and compares each event date against the current system date.
  *
- * The function prompts the user to select an option and does not return any value.
- * @note This function is called in the main loop of the application to display the menu after each operation. It is responsible for providing a clear and organized interface for users to navigate the system's features.
- * @return void
+ * A reservation is automatically updated only if:
+ * - Its status is currently CONFIRMED
+ * - Its event date has already passed
+ *
+ * Reservations marked as COMPLETED or CANCELLED are not modified.
+ *
+ * If one or more reservations are updated:
+ * - Their status is changed from CONFIRMED to COMPLETED
+ * - The changes are saved to the CSV file
+ * - An informational message is displayed to notify the user
+ *
+ * This feature helps maintain data consistency by preventing outdated
+ * reservations from remaining in an active confirmed state.
+ *
+ * @note
+ * This function should be called before displaying reservation records,
+ * such as at the beginning of manageReservations(), so expired events
+ * are updated automatically before management operations begin.
+ *
+ * @warning
+ * This function relies on the system date and assumes reservation dates
+ * stored in the database are valid and correctly formatted.
+ *
+ * @return int
+ */
+int autoCompletePastReservations() {
+    time_t t = time(0);
+    tm* now = localtime(&t);
+
+    int currentYear  = now->tm_year + 1900;
+    int currentMonth = now->tm_mon + 1;
+    int currentDay   = now->tm_mday;
+
+    int counter = 0; 
+    for (auto& r : reservationList) {
+        if (r.getStatus() == CONFIRMED && r.isPastDate(currentYear, currentMonth, currentDay)) {
+            r.setStatus(COMPLETED);
+            counter++;
+        }
+    }
+    if (counter > 0) saveToFile();
+    return counter;
+}
+
+// --- UI Functions ---
+/**
+ * @brief Displays the central navigation hub for the Catering Reservation System.
+ *
+ * @details
+ * This function renders the primary Command Line Interface (CLI) menu. It serves as the 
+ * entry point for all system modules, categorized into four strategic operations:
+ * * 1. **New Reservation**: Input module for gathering customer and event details.
+ * 2. **Manage & View Reservations**: Operational dashboard with sorting, searching, and pagination.
+ * 3. **Financial & Sales Report**: Business Intelligence module for annual revenue analysis.
+ * 4. **Exit System**: Gracefully terminates the application and closes file streams.
+ *
+ * @note This function is the root of the application's control flow. It should be called 
+ * within a `while(true)` loop in `main()` to ensure the user returns to this hub after 
+ * completing any specific task.
+ * * @return void
  */
 void displayMenu() {
     cout << "\n========================================" << endl;
@@ -475,7 +575,8 @@ void displayMenu() {
     cout << "========================================" << endl;
     cout << "1. New Reservation" << endl;
     cout << "2. Manage & View Reservations" << endl;
-    cout << "3. Exit System" << endl;
+    cout << "3. Financial & Sales Report" << endl;
+    cout << "4. Exit System" << endl;
     cout << "----------------------------------------" << endl;
     cout << "Select an option: ";
 }
@@ -582,7 +683,7 @@ void makeReservation() {
 
         // Count existing events and guests for the selected date
         for (const auto& res : reservationList) {
-            if (res.getYear() == y && res.getMonth() == m && res.getDay() == d && res.getStatus() != "Cancelled") {
+            if (res.getYear() == y && res.getMonth() == m && res.getDay() == d && res.getStatus() != CANCELLED) {
                 eventCount++;
                 currentDailyGuests += res.getGuests();
             }
@@ -646,7 +747,14 @@ void makeReservation() {
         }
 
         // --- Success Path ---
-        int newId = reservationList.empty() ? 1001 : reservationList.back().getId() + 1; ///< Generates a new unique reservation ID by checking if the reservation list is empty. If it is empty, it starts with 1001; otherwise, it takes the ID of the last reservation in the list and increments it by 1 to ensure uniqueness.
+        int newId = 1001;
+
+        for(const auto& r : reservationList){
+            if(r.getId() >= newId)
+            newId = r.getId()+1;
+        }
+
+         ///< Generates a new unique reservation ID by checking if the reservation list is empty. If it is empty, it starts with 1001; otherwise, it takes the ID of the last reservation in the list and increments it by 1 to ensure uniqueness.
         reservationList.push_back(Reservation(newId, name, y, m, d, pkg, guests));
         saveToFile(); 
 
@@ -672,6 +780,8 @@ void makeReservation() {
  * @return void
  */
 void manageReservations() {
+    int updatedCount = autoCompletePastReservations();
+
     int currentPage = 0; ///< Tracks the current page number for pagination. It is initialized to 0, which corresponds to the first page of reservations. The currentPage variable is updated based on user input for navigating through pages (e.g., next, previous) and is used to calculate which reservations to display on the current page.
     const int itemsPerPage = 10; ///< Defines the number of reservations to display per page in the reservation management interface. This constant is used in pagination calculations to determine how many reservations to show on each page and how many pages are needed to display all reservations. It can be adjusted to show more or fewer reservations per page based on user preference or screen size.
     string searchQuery = ""; ///< Stores the current search query entered by the user for filtering reservations. It is initialized as an empty string, which means that by default, no filtering is applied and all reservations are shown. When the user enters a search query, this variable is updated and used to filter the reservation list based on matching criteria (e.g., customer name, reservation ID, event date) before displaying the results.
@@ -682,7 +792,9 @@ void manageReservations() {
 
     while (true) {
         clearscreen();
-        
+        if (updatedCount > 0) {
+            INFO("System Maintenance: " + to_string(updatedCount) + " past events marked as COMPLETED.");
+        }
         // 1. Create Filtered View & Calculate Dashboard Stats
         vector<Reservation*> filtered; ///< Stores pointers to reservations that match the current search query. This allows for efficient filtering without modifying the original reservation list. The filtered vector is populated based on the search criteria entered by the user, and it is used for sorting and pagination in the display.
         double confirmedRevenue = 0;  ///< Tracks the total revenue from reservations that are currently confirmed. This variable is updated as the reservation list is filtered, summing the total cost of all reservations with a status of "Confirmed". It is displayed in the dashboard to provide insight into potential upcoming revenue based on current bookings.
@@ -696,10 +808,10 @@ void manageReservations() {
                 
                 filtered.push_back(&res);
                 
-                if (res.getStatus() == "Confirmed") {
+                if (res.getStatus() == CONFIRMED) {
                     confirmedRevenue += res.getTotal();
                     activeCount++;
-                } else if (res.getStatus() == "Completed") {
+                } else if (res.getStatus() == COMPLETED) {
                     completedRevenue += res.getTotal();
                 }
             }
@@ -734,13 +846,7 @@ void manageReservations() {
         // 4. UI Header & Dashboard Display
         cout << "================================================================================" << endl;
         cout << "   MANAGE RESERVATIONS | " << (sortByDate ? "Sorting: DATE" : "Sorting: ID") 
-             << " [" << (ascending ? "ASC" : "DESC") << "]" << endl;
-        
-        // Split Revenue Stats
-        cout << "   Active: " << activeCount 
-             << " | Confirmed: P" << fixed << setprecision(2) << confirmedRevenue 
-             << " | Completed: P" << completedRevenue << endl;
-             
+             << " [" << (ascending ? "ASC" : "DESC") << "]" << "   Active: " << activeCount << endl;  
         cout << "   Page " << currentPage + 1 << " of " << totalPages << " (" << filtered.size() << " results)" << endl;
         cout << "================================================================================" << endl;
         
@@ -803,7 +909,7 @@ void manageReservations() {
                 for(auto& r : reservationList) {
                     if(r.getId() == fid) {
                         found = true;
-                        if(r.getStatus() == "Confirmed") {
+                        if(r.getStatus() == CONFIRMED) {
                             r.setStatus(COMPLETED);
                             saveToFile();
                             SUCCESS("ID " + to_string(fid) + " marked as Completed!");
@@ -854,7 +960,7 @@ void manageReservations() {
                 for(auto& r : reservationList) {
                     if(r.getId() == cid) {
                         found = true;
-                        if(r.getStatus() != "Cancelled") {
+                        if(r.getStatus() != CANCELLED) {
                             r.setStatus(CANCELLED);
                             saveToFile();
                             SUCCESS("ID " + to_string(cid) + " is now Cancelled.");
@@ -894,7 +1000,7 @@ void manageReservations() {
                     continue;
                 }
 
-                if (did == 0) continue; // Allow user to cancel by entering '0' for ID.
+                if (did == 0) break; // Allow user to cancel by entering '0' for ID.
 
                 // Find the reservation by ID
                 auto it = find_if(reservationList.begin(), reservationList.end(), [&](const Reservation& r) {
@@ -935,6 +1041,117 @@ void manageReservations() {
             
         }
     }
+}
+
+/**
+ * @brief Generates an annual financial sales report with an optional file export.
+ * * @details
+ * This function performs a single-pass aggregation of all COMPLETED reservations 
+ * for a target year. It displays the results in a formatted table on the console 
+ * and provides the user an option to save a human-readable text file (e.g., Sales_Report_2026.txt) 
+ * for physical record-keeping.
+ * * @note The export feature uses std::stringstream to ensure the file content matches 
+ * the console output exactly.
+ */
+void generateSalesReport() {
+    clearscreen();
+    int targetYear;
+    cout << "====================================================" << endl;
+    cout << "           FINANCIAL & SALES REPORT                " << endl;
+    cout << "====================================================" << endl;
+    cout << "Enter Year to analyze: ";
+    
+    if (!(cin >> targetYear)) {
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        ERROR("Invalid input. Numeric year only.");
+        cout << "Press Enter to return...";
+        cin.get(); return;
+    }
+    cout.imbue(locale::classic());
+    double monthlyRevenue[13] = {0.0}; 
+    int monthlyCount[13] = {0};
+    double totalYearly = 0;
+    int totalEvents = 0;
+
+    // Use stringstream to capture the report for potential file export
+    stringstream ss;
+    const string monthNames[] = {"", "January", "February", "March", "April", "May", "June", 
+    "July", "August", "September", "October", "November", "December"};
+                                
+    //Header
+    ss.imbue(locale::classic()); 
+    ss << "====================================================\n";
+    ss << "           FINANCIAL & SALES REPORT - " << targetYear << "\n"; // Year: 2026
+    ss << "====================================================\n";
+    ss << left << setw(15) << "MONTH" << setw(12) << "EVENTS" << "REVENUE" << "\n";
+    ss << "----------------------------------------------------\n";
+
+    // Aggregate data
+    for (const auto& res : reservationList) {
+        if (res.getYear() == targetYear && res.getStatus() == COMPLETED) {
+            int m = res.getMonth();
+            if (m >= 1 && m <= 12) {
+                monthlyRevenue[m] += res.getTotal();
+                monthlyCount[m]++;
+                totalYearly += res.getTotal();
+                totalEvents++;
+            }
+        }
+    }
+
+    
+    // Display Rows
+    for (int i = 1; i <= 12; i++) {
+        if (monthlyCount[i] > 0) {
+            // Standard columns
+            ss.imbue(locale::classic());
+            ss << left << setw(15) << monthNames[i] 
+               << setw(12) << monthlyCount[i] << "P";
+            
+            // MONEY ONLY: Switch to Comma Locale
+            ss.imbue(locale("en_US.UTF-8"));
+            ss << fixed << setprecision(2) << monthlyRevenue[i] << "\n";
+        }
+    }
+    
+    //Footer
+    ss.imbue(locale::classic());
+    ss << "----------------------------------------------------\n";
+    ss << "TOTAL COMPLETED EVENTS: " << totalEvents << "\n";
+    ss << "NET ANNUAL REVENUE:     P";
+    
+    // Switch for the Grand Total
+    ss.imbue(locale("en_US.UTF-8"));
+    ss << totalYearly << "\n";
+    
+    ss.imbue(locale::classic());
+    ss << "====================================================\n";
+    
+    // Display captured report to console
+    cout << "\n" << ss.str();
+    cout.imbue(locale::classic());
+    // Export Option
+    cout << "\nWould you like to export this report to a text file? (y/n): ";
+    char choice;
+    cin >> choice;
+
+    if (tolower(choice) == 'y') {
+        string fileName = "Sales_Report_" + to_string(targetYear) + ".txt";
+        ofstream reportFile(fileName);
+        if (reportFile.is_open()) {
+            reportFile.imbue(locale("en_US.UTF-8"));
+            reportFile << ss.str();
+            reportFile.close();
+            SUCCESS("Report saved as " + fileName);
+        } else {
+            ERROR("Could not create the report file.");
+        }
+    }
+
+    cout << "\nPress Enter to return to Main Menu...";
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    cin.get();
 }
 
 // --- End of UI Functions ---
@@ -979,6 +1196,11 @@ int main() {
                 clearscreen();
                 break;
 
+            case SALES_REPORT:
+                generateSalesReport();
+                clearscreen();
+            break;
+            
             case EXIT:
                 SUCCESS("Thank you for using the Catering Reservation System. Goodbye!");
                 running = false;
