@@ -15,25 +15,33 @@ This program lets users create and manage catering reservations through a menu-d
 ## ✅ Key Features
 
 - **Smart booking limits**
-  - Maximum 3 reservations per date
-  - Maximum 250 guests per day
-  - Minimum 10 guests per reservation
+    - Maximum 3 reservations per date
+    - Maximum 250 guests per day
+    - Minimum 10 guests per reservation
 - **Date validation**
-  - Rejects past dates
-  - Correctly handles leap years
-  - Validates month and day entry
+    - Rejects past dates
+    - Correctly handles leap years
+    - Validates month and day entry
 - **Package pricing**
-  - Basic: P250 per guest
-  - Premium: P450 per guest
-  - Luxury: P600 per guest
+    - Basic: P250 per guest
+    - Premium: P450 per guest
+    - Luxury: P600 per guest
 - **Reservation management**
-  - View reservations with filtering and pagination
-  - Mark bookings as Completed
-  - Cancel reservations
-  - Delete reservations
+    - View reservations with filtering and pagination
+    - Search by Name, ID, or Date.
+    - Toggle sorting between Date and ID (Ascending/Descending).
+    - Mark bookings as Completed
+    - Cancel reservations
+    - Delete reservations
 - **Persistent storage**
-  - Data is saved to `reservations.csv`
-  - Existing reservations are loaded automatically at startup
+    - Data is saved to `reservations.csv`
+    - Existing reservations are loaded automatically at startup
+-  **Automated Maintenance**
+    - Automatically detects past dates and updates `CONFIRMED` events to `COMPLETED` upon opening the management view.
+- **Financial & Sales Reporting**
+    - Aggregates revenue for `COMPLETED` events by month and year.
+    - **Locale-Aware Formatting**: Displays currency with proper Philippine Peso formatting and thousands separators.
+    - **Export**: Saves reports as human-readable `.txt` files.
 
 ## 📘 Variables Dictionary
 
@@ -47,7 +55,7 @@ This program lets users create and manage catering reservations through a menu-d
 | `PRICE_LUXURY` | `double` | Cost per guest for the Luxury package (P600). |
 | `PackageType` | `enum` | Package tiers: `BASIC`, `PREMIUM`, `LUXURY`. |
 | `ReservationStatus` | `enum` | Reservation states: `CONFIRMED`, `COMPLETED`, `CANCELLED`. |
-| `MenuOption` | `enum` | Main menu options: `MAKE_RESERVATION`, `MANAGE_RESERVATIONS`, `EXIT`. |
+| `MenuOption` | `enum` | Main menu options: `MAKE_RESERVATION`, `MANAGE_RESERVATIONS`, `SALES_REPORT`, `EXIT`. |
 | `Color` | `enum` | ANSI text color codes used for terminal feedback. |
 | `reservationList` | `vector<Reservation>` | In-memory list of all reservations. |
 | `currentPage` | `int` | Current page index in the reservation management view. |
@@ -74,9 +82,12 @@ This program lets users create and manage catering reservations through a menu-d
 | `getYear()` | `int` | Returns the event year. |
 | `getMonth()` | `int` | Returns the event month. |
 | `getDay()` | `int` | Returns the event day. |
-| `getStatus()` | `string` | Returns the reservation status as a human-readable string. |
+| `getStatus()` | `int` | Returns the reservation status. |
+| `getStatusString()` | `string` | Converts a ReservationStatus enum to a human-readable string. |
 | `setStatus(ReservationStatus newStatus)` | `void` | Updates the reservation status. |
 | `showReservation()` | `void` | Prints the reservation details in a formatted table row. |
+| `isPastDate(y, m, d)` | `bool` | Compares the event date against a provided reference date. |
+| `getTruncatedCustomerName(size_t)` | `string` | Appends `...` to names exceeding column width for UI stability. |
 
 ## 🔧 Function Summary
 
@@ -95,6 +106,7 @@ This program lets users create and manage catering reservations through a menu-d
 | `displayMenu()` | `void` | Prints the main menu options to the console. |
 | `makeReservation()` | `void` | Handles user input and validation to create a new reservation. |
 | `manageReservations()` | `void` | Allows searching, pagination, status updates, cancellations, and deletion of reservations. |
+| `generateSalesReport()` | `void` | Business Intelligence module with stringstream-based file export. |
 | `main()` | `int` | Program entry point; initializes data and runs the main menu loop. |
 
 ## 📁 Files
@@ -102,6 +114,7 @@ This program lets users create and manage catering reservations through a menu-d
 - `main.cpp` — main application source code
 - `reservations.csv` — stored reservation data (generated on save)
 - `README.MD` — repository README file
+- `Sales_Report_[Year].txt`: Generated when the user exports a financial report.
 
 ## 🛠️ Build Instructions
 
@@ -139,7 +152,15 @@ catering_system.exe
 - Names cannot include commas to preserve CSV file integrity.
 - The program uses ANSI color codes for success, warning, and error messages.
 - Reservations are assigned IDs starting from `1001`.
+- When navigating the **Manage Reservations** screen, use the single-letter commands displayed at the bottom:
+  * **[N]**: Next Page.
+  * **[P]**: Next Page.
+  * **[S]**: Opens the search bar.
+  * **[T]**: Flips the sort between Date and ID.
+  * **[F]**: Marks an event as done (Completed).
+  * **[D]**: Permanently removes a record.
 
 ## 👨‍💻 Author
-
-Built from the provided `main.cpp` source code by Jerlo F. De Leon.
+- **Jerlo F. De Leon** 
+- Computer Science Student, St. Clare College of Caloocan
+-  Expected Graduation: 2026
