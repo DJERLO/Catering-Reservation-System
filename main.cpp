@@ -40,28 +40,16 @@ using namespace std;
 
 /**
  * @defgroup constraints System Constraints
- * @brief Operational limits of the catering system.
- *
- * @details
- * Ensures the system operates within manageable capacity.
+ * @brief Operational limits and pricing tiers for the catering system.
  */
 /// @{
-const int MAX_EVENTS_PER_DAY = 3;     ///< Maximum bookings per day
-const int MAX_TOTAL_GUESTS = 250;     ///< Maximum guests per day
-const int MIN_GUESTS_PER_EVENT = 10;  ///< Minimum guests per reservation
-/// @}
+const int MAX_EVENTS_PER_DAY = 3;     ///< The maximum number of separate bookings allowed on a single calendar date.
+const int MAX_TOTAL_GUESTS = 250;     ///< The upper limit for the sum of guests across all events in one day.
+const int MIN_GUESTS_PER_EVENT = 10;   ///< The minimum headcount required to accept a single reservation.
 
-/**
- * @defgroup pricing Pricing Per Guest
- * @brief Cost per guest for each catering package.
- *
- * @details
- * Used to calculate reservation total cost.
- */
-/// @{
-const double PRICE_BASIC   = 250.0;   ///< BASIC package price
-const double PRICE_PREMIUM = 450.0;   ///< PREMIUM package price
-const double PRICE_LUXURY  = 600.0;   ///< LUXURY package price
+const double PRICE_BASIC = 250.0;     ///< Cost per head for the Basic package (Standard service).
+const double PRICE_PREMIUM = 450.0;   ///< Cost per head for the Premium package (Enhanced menu).
+const double PRICE_LUXURY = 600.0;    ///< Cost per head for the Luxury package (Full service & premium menu).
 /// @}
 
 // --- End of Global Constants ---
@@ -93,6 +81,15 @@ enum ReservationStatus {
     CONFIRMED = 1,  ///< Reservation is confirmed and active
     COMPLETED,      ///< Event has been successfully completed
     CANCELLED       ///< Reservation has been cancelled
+};
+
+/**
+ * @brief Simple structure to hold date components.
+ */
+struct Date {
+    int year;
+    int month;
+    int day;
 };
 
 
@@ -232,6 +229,32 @@ void ERROR(string message) {
 }
 // --- End of Colored Output Functions ---
 
+/**
+ * @brief Helper function to fetch the current system date.
+ * @return A Date struct containing current year, month, and day.
+ */
+Date getCurrentDate() {
+    time_t t = time(0);
+    tm* now = localtime(&t);
+    return { now->tm_year + 1900, now->tm_mon + 1, now->tm_mday };
+}
+
+/**
+ * @brief Handles the entire error sequence: Resets input, alerts user, 
+ * waits for Enter, and cleans up the UI.
+ * @param message The error text to display.
+ * @param linesToClear How many lines to wipe from the terminal (default is 3).
+ */
+void handleInputError(string message, int linesToClear = 3) {
+    cin.clear();
+    cin.ignore(numeric_limits<streamsize>::max(), '\n');
+    ERROR(message);
+    cout << "Press Enter to try again...";
+    cin.get(); 
+    clearLines(linesToClear);
+}
+
+
 // --- End of Helper Functions ---
 
 // --- The Reservation Class ---
@@ -337,7 +360,7 @@ public:
         return customerName;
     }
 
-    int getStatus() const { return status;}
+    int getStatus() const { return status;} ///< Returns the status of the event.
     
     /**
      * @brief Converts a ReservationStatus enum to a human-readable string.
@@ -417,6 +440,72 @@ public:
  * @note The reservation list is stored in memory and is loaded from a file at the start of the application. Any changes to reservations (additions, updates, deletions) should be followed by a call to saveToFile() to ensure that the data is persisted. The list is cleared and reloaded from the file when loadFromFile() is called, which can be used to refresh the data or reset the state of the application.
  */
 vector<Reservation> reservationList;
+
+/**
+ * @brief Sorts a filtered list of reservations based on the active view and direction.
+ * * @details This function implements a contextual sorting strategy.
+ * - **Upcoming View:** Sorts by date in ascending order (earliest dates at the top) 
+ * to highlight immediate tasks.
+ * - **Archive View:** Sorts by date in descending order (most recent past events at the top) 
+ * for better historical auditing.
+ * - **Manual Override:** The isReverse flag allows the user to flip the logic in either view.
+ * * @param filtered A reference to a vector of pointers to Reservation objects to be sorted.
+ * @param showArchive A boolean flag indicating if the list contains past events (true) or upcoming events (false).
+ * @param isReverse A boolean flag that, when true, inverts the default chronological order.
+ */
+void reservationListSort(vector<Reservation*>& filtered, bool showArchive, bool isReverse = false) {
+    auto getVal = [](Reservation* r) { 
+        return r->getYear() * 10000 + r->getMonth() * 100 + r->getDay(); 
+    };
+
+    sort(filtered.begin(), filtered.end(), [showArchive, isReverse, getVal](Reservation* a, Reservation* b) {
+        long valA = getVal(a);
+        long valB = getVal(b);
+
+        bool condition;
+        if (!showArchive) {
+            // Upcoming: Default is Ascending (Soonest first)
+            condition = valA < valB;
+        } else {
+            // Archive: Default is Descending (Recent history first)
+            condition = valA > valB;
+        }
+
+        // If isReverse is true, flip the logic
+        return isReverse ? !condition : condition;
+    });
+}
+
+/**
+ * @brief Filters the reservation list by customer name while respecting the current view.
+ * * @details Performs a case-insensitive partial match search on customer names. It automatically
+ * filters results to match the 'Upcoming' or 'Archive' context based on the current system date.
+ * * @param fullList The master vector containing all reservation objects.
+ * @param filtered A reference to the vector of pointers that will be populated with matching results.
+ * @param showArchive Boolean determining whether to search within past records (true) or upcoming ones (false).
+ * @param keyword The string used to filter customer names.
+ * * @note This function uses `const_cast` to maintain pointer references to the original objects 
+ * while searching a constant reference list.
+ */
+void handleSearch(const vector<Reservation>& fullList, vector<Reservation*>& filtered, bool showArchive, string keyword) {
+    filtered.clear();
+    Date today = getCurrentDate();
+    
+    // Convert keyword to lowercase for case-insensitive search
+    transform(keyword.begin(), keyword.end(), keyword.begin(), ::tolower);
+
+    for (auto& res : const_cast<vector<Reservation>&>(fullList)) {
+        string name = res.getName();
+        transform(name.begin(), name.end(), name.begin(), ::tolower);
+
+        bool isPast = res.isPastDate(today.year, today.month, today.day);
+        
+        // Match name AND Match the current View Toggle
+        if (name.find(keyword) != string::npos && isPast == showArchive) {
+            filtered.push_back(&res);
+        }
+    }
+}
 
 // --- File I/O Functions ---
 
@@ -534,16 +623,11 @@ void loadFromFile() {
  * @return int
  */
 int autoCompletePastReservations() {
-    time_t t = time(0);
-    tm* now = localtime(&t);
-
-    int currentYear  = now->tm_year + 1900;
-    int currentMonth = now->tm_mon + 1;
-    int currentDay   = now->tm_mday;
+    Date currentDate = getCurrentDate();
 
     int counter = 0; 
     for (auto& r : reservationList) {
-        if (r.getStatus() == CONFIRMED && r.isPastDate(currentYear, currentMonth, currentDay)) {
+        if (r.getStatus() == CONFIRMED && r.isPastDate(currentDate.year, currentDate.month, currentDate.day)) {
             r.setStatus(COMPLETED);
             counter++;
         }
@@ -594,11 +678,7 @@ void displayMenu() {
  * @return void
  */
 void makeReservation() {
-    time_t t = time(0); ///< Gets the current time as a time_t object, which represents the number of seconds since January 1, 1970 (the Unix epoch). This is used to retrieve the current date for validating reservation dates against the current date.
-    tm* now = localtime(&t); ///< Retrieves the current local time and stores it in a tm structure, which contains fields for the year, month, day, and other components of the date and time. This is used to validate that the reservation date entered by the user is not in the past.
-    int currentYear = now->tm_year + 1900; ///< Calculates the current year by adding 1900 to the tm_year field of the tm structure, which represents the number of years since 1900.
-    int currentMonth = now->tm_mon + 1; ///< Calculates the current month by adding 1 to the tm_mon field of the tm structure, which represents the month of the year (0-11). Adding 1 converts it to a more human-readable format (1-12).
-    int currentDay = now->tm_mday; ///< Retrieves the current day of the month from the tm structure, which is stored in the tm_mday field. This value represents the day of the month (1-31) and is used for validating reservation dates against the current date to prevent booking in the past.
+    Date currentDate = getCurrentDate(); // Fetch Today's Date
 
     while (true) {
         clearscreen();
@@ -609,73 +689,68 @@ void makeReservation() {
         cout << "     NEW CATERING RESERVATION           " << endl;
         cout << "   (Type '0' at any time to cancel)     " << endl;
         cout << "========================================" << endl;
-        INFO("Today's Date: " + to_string(currentYear) + "-" + to_string(currentMonth) + "-" + to_string(currentDay));
+        INFO("Today's Date: " + to_string(currentDate.year) + "-" + to_string(currentDate.month) + "-" + to_string(currentDate.day));
         
-        // --- Input Section ---
-        cout << "\nCustomer Name: ";
-        getline(cin >> ws, name);
-        if (name == "0") return;
+        // --- 1.Customer Name ---
+        customername:
+            cout << "\nCustomer Name: ";
+            getline(cin >> ws, name);
+            if (name == "0") return;
 
-        // --- Name Validation ---
-        if (name.find(',') != string::npos) {
-            ERROR("Commas are not allowed in names for database safety.");
-            cout << "Press Enter to try again..."; cin.get();
-            continue;
-        }
+            // --- Name Validation ---
+            if (name.find(',') != string::npos) {
+                ERROR("Commas are not allowed in names for database safety.");
+                cout << "Press Enter to try again..."; cin.get();
+                clearLines(4); // Clear the error message and prompt
+                goto customername;
+            }
 
-        // --- 1. Year Validation ---
-        cout << "Year (YYYY): "; 
+        // --- 2. Year Validation ---
+        year:
+            cout << "Year (YYYY): "; 
 
-        while (!(cin >> y) || cin.peek() != '\n') { 
-            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            ERROR("Numeric only! Enter year (e.g., 2026)");
-            cout << "Press Enter to try again...";
-            cin.get(); // Wait for user to press Enter
-            clearLines(3); // Clear the error message and prompt
-            cout << "Year (YYYY): ";
-        }
+            while (!(cin >> y) || cin.peek() != '\n') { 
+                handleInputError("Numeric only! Enter year (e.g., 2026)");
+                cout << "Year (YYYY): ";
+            }
 
-        if (y == 0) return; //Allow user to cancel by entering '0' for year.
+            if (y == 0) return; //Allow user to cancel by entering '0' for year.
 
-        if (y < currentYear) {
-            ERROR("Invalid Year: Past years are not allowed.");
-            cout << "Press Enter to try again..."; cin.ignore(); cin.get();
-            continue;
-        }
+            if (y < currentDate.year) {
+                handleInputError("Invalid Year: Past years are not allowed.");
+                goto year;
+            }
         
-        // --- 2. Month Validation (Fixed the bug here) ---
-        cout << "Month (1-12): "; 
-        while (!(cin >> m) || m < 0 || m > 12 || cin.peek() != '\n' ) { 
-            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); 
-            ERROR("Invalid! Enter month (1-12)");
-            cout << "Press Enter to try again...";
-            cin.get(); // Wait for user to press Enter
-            clearLines(3); // Clear the error message and prompt
-            cout << "Month (1-12): ";
-        }
-        
-        if (m == 0) return; // Allow user to cancel by entering '0' for month as well.
+        // --- 3. Month Validation ---
+        month:
+            cout << "Month (1-12): "; 
+            while (!(cin >> m) || m < 0 || m > 12 || cin.peek() != '\n' ) { 
+                handleInputError("Invalid! Enter month (1-12)");
+                cout << "Month (1-12): ";
+            }
 
-        // --- 3. Day Validation ---
-        int maxDays = getMaxDays(m, y); ///< Calculates the maximum number of days for the given month and year, accounting for leap years.
-        cout << "Day (1-" << maxDays << "): "; 
-        while (!(cin >> d) || d < 0 || d > maxDays || cin.peek() != '\n') { 
-            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n'); 
-            ERROR("Invalid! Enter valid day for this month");
-            cout << "Press Enter to try again...";
-            cin.get(); // Wait for user to press Enter
-            clearLines(3); // Clear the error message and prompt
-            cout << "Day (1-" << maxDays << "): ";
-        }
+            if (m == 0) return; // Allow user to cancel by entering '0' for month as well.
 
-        if (d == 0) return; // Allow user to cancel by entering '0' for day as well.
+            if (y == currentDate.year && m < currentDate.month) {
+                handleInputError("Invalid Month: Past month are not allowed.");
+                goto month;
+            }
 
-        // --- 4. Past Date Check (Full Date) ---
-        if (y == currentYear && (m < currentMonth || (m == currentMonth && d < currentDay))) {
-            ERROR("Invalid Date: This day has already passed!");
-            cout << "Press Enter to try again..."; cin.ignore(); cin.get();
-            continue;
-        }
+        // --- 4. Day Validation ---
+        day:
+            int maxDays = getMaxDays(m, y); ///< Calculates the maximum number of days for the given month and year, accounting for leap years.
+            cout << "Day (1-" << maxDays << "): "; 
+            while (!(cin >> d) || d < 0 || d > maxDays || cin.peek() != '\n') { 
+                handleInputError("Invalid! Enter valid day for this month");
+                cout << "Day (1-" << maxDays << "): ";
+            }
+            
+            if (d == 0) return; // Allow user to cancel by entering '0' for day as well.
+
+            if (y == currentDate.year && m == currentDate.month && d < currentDate.day) {
+                handleInputError("Invalid Day: Past Day are not allowed.");    
+                goto day;
+            }
 
         // --- 5. Capacity Check ---
         int eventCount = 0; ///< Counts the number of existing reservations for the selected date.
@@ -704,38 +779,25 @@ void makeReservation() {
         cout << "Select Package: "; 
         
         while (!(cin >> pkg) || pkg < 0 || pkg > 3 || cin.peek() != '\n') {
-            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            ERROR("Invalid! Select package 1, 2, or 3");
-            cout << "Press Enter to try again...";
-            cin.get(); // Wait for user to press Enter
-            clearLines(3); // Clear the error message and prompt
+            handleInputError("Invalid! Select package 1, 2, or 3");
             cout << "Select Package: ";
         }
 
-        if (pkg == 0) return;
-        if (pkg < 1 || pkg > 3) {
-            ERROR("Invalid Package selection.");
-            cout << "Press Enter to try again..."; cin.ignore(); cin.get();
-            continue;
-        }
+        if (pkg == 0) return; // Allow user to cancel by entering '0' for package selection as well.
         
-        cout << "Number of Guests: "; 
-        while(!(cin >> guests) || guests < 0 || cin.peek() != '\n') {
-            cin.clear(); cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            ERROR("Numeric only! Enter number of guests");
-            cout << "Press Enter to try again...";
-            cin.get(); // Wait for user to press Enter
-            clearLines(3); // Clear the error message and prompt
-            cout << "Number of Guests: ";
-        }
-        if (guests == 0) return;
-        
-        // Validation for Guest Limits
-        if (guests < MIN_GUESTS_PER_EVENT) {
-            ERROR("Order too small! Minimum guests required: " + to_string(MIN_GUESTS_PER_EVENT));
-            cout << "Press Enter to try again..."; cin.ignore(); cin.get();
-            continue;
-        }
+        guest:
+            cout << "Number of Guests: "; 
+            while(!(cin >> guests) || guests < 0 || cin.peek() != '\n') {
+                handleInputError("Numeric only! Enter number of guests");
+                cout << "Number of Guests: ";
+            }
+            if (guests == 0) return; // Allow user to cancel by entering '0' for number of guest as well.
+            
+            // Validation for Guest Limits
+            if (guests < MIN_GUESTS_PER_EVENT) {
+                handleInputError("Order too small! Minimum guests required: " + to_string(MIN_GUESTS_PER_EVENT));
+                goto guest;
+            }
 
         // Check if adding this reservation would exceed total daily capacity
         if (currentDailyGuests + guests > MAX_TOTAL_GUESTS) {
@@ -743,15 +805,23 @@ void makeReservation() {
             ERROR("Capacity Exceeded! We can only accommodate " + to_string(remaining) + " more guests today.");
             WARNING("Current bookings for this day already have " + to_string(currentDailyGuests) + " guests.");
             cout << "Press Enter to try again..."; cin.ignore(); cin.get();
-            continue;
+            goto guest;
         }
 
         // --- Success Path ---
-        int newId = 1001;
+        /** @brief Unique Identifier Generation Logic */
+        int newId = 1001; ///< Starting ID for the first reservation ever created.
 
+        // --- Success Path: Dynamic ID Assignment ---
+        /** * @details
+         * This loop implements an "Auto-Increment" behavior. It scans the entire 
+         * reservationList to find the highest existing ID and sets the newId to 
+         * (Highest ID + 1). This ensures that even if records are deleted, the 
+         * system never duplicates an ID number.
+         */
         for(const auto& r : reservationList){
             if(r.getId() >= newId)
-            newId = r.getId()+1;
+            newId = r.getId()+1; ///< Increments to the next available unique integer.
         }
 
          ///< Generates a new unique reservation ID by checking if the reservation list is empty. If it is empty, it starts with 1001; otherwise, it takes the ID of the last reservation in the list and increments it by 1 to ensure uniqueness.
@@ -780,74 +850,72 @@ void makeReservation() {
  * @return void
  */
 void manageReservations() {
-    int updatedCount = autoCompletePastReservations();
+    /** @brief Result of the automatic system maintenance. */
+    int updatedCount = autoCompletePastReservations(); ///< Tracks how many 'CONFIRMED' events were automatically moved to 'COMPLETED' based on the system date.
 
     int currentPage = 0; ///< Tracks the current page number for pagination. It is initialized to 0, which corresponds to the first page of reservations. The currentPage variable is updated based on user input for navigating through pages (e.g., next, previous) and is used to calculate which reservations to display on the current page.
     const int itemsPerPage = 10; ///< Defines the number of reservations to display per page in the reservation management interface. This constant is used in pagination calculations to determine how many reservations to show on each page and how many pages are needed to display all reservations. It can be adjusted to show more or fewer reservations per page based on user preference or screen size.
     string searchQuery = ""; ///< Stores the current search query entered by the user for filtering reservations. It is initialized as an empty string, which means that by default, no filtering is applied and all reservations are shown. When the user enters a search query, this variable is updated and used to filter the reservation list based on matching criteria (e.g., customer name, reservation ID, event date) before displaying the results.
     
     // Sort states
-    bool sortByDate = true; ///< Indicates whether the reservations are currently sorted by date. It is initialized to true, meaning that the default sorting is by date. The user can toggle this state to switch between sorting by date and sorting by reservation ID.
     bool ascending = true; ///< Indicates the current sorting order (ascending or descending). It is initialized to true, meaning that the default sorting order is ascending. The user can toggle this state to switch between ascending and descending order for the current sorting criteria (date or ID).
-
+    bool isReverse = false; // Indicates Ascending/Descending List
+    bool showArchive = false; // Default to showing upcoming events
+    bool sortByDate = true; ///< Indicates whether the reservations are currently sorted by date. It is initialized to true, meaning that the default sorting is by date. The user can toggle this state to switch between sorting by date and sorting by reservation ID.
+    
     while (true) {
         clearscreen();
         if (updatedCount > 0) {
             INFO("System Maintenance: " + to_string(updatedCount) + " past events marked as COMPLETED.");
         }
+
         // 1. Create Filtered View & Calculate Dashboard Stats
         vector<Reservation*> filtered; ///< Stores pointers to reservations that match the current search query. This allows for efficient filtering without modifying the original reservation list. The filtered vector is populated based on the search criteria entered by the user, and it is used for sorting and pagination in the display.
+        Date today = getCurrentDate();
+        long todayVal = today.year * 10000 + today.month * 100 + today.day;
         double confirmedRevenue = 0;  ///< Tracks the total revenue from reservations that are currently confirmed. This variable is updated as the reservation list is filtered, summing the total cost of all reservations with a status of "Confirmed". It is displayed in the dashboard to provide insight into potential upcoming revenue based on current bookings.
         double completedRevenue = 0; ///< Tracks the total revenue from reservations that have been completed. This variable is updated as the reservation list is filtered, summing the total cost of all reservations with a status of "Completed". It is displayed in the dashboard to provide insight into revenue that has already been realized from completed events.
         int activeCount = 0; ///< Counts the number of active reservations (those that are currently confirmed but not yet completed or cancelled). This variable is updated as the reservation list is filtered, incrementing for each reservation with a status of "Confirmed". It is displayed in the dashboard to provide insight into how many upcoming events are currently active.
 
-        for (auto& res : reservationList) {
-            string dateStr = to_string(res.getYear()) + "-" + to_string(res.getMonth()) + "-" + to_string(res.getDay());
-            if (searchQuery == "" || res.getName().find(searchQuery) != string::npos || 
-                to_string(res.getId()).find(searchQuery) != string::npos || dateStr.find(searchQuery) != string::npos) {
-                
-                filtered.push_back(&res);
-                
-                if (res.getStatus() == CONFIRMED) {
-                    confirmedRevenue += res.getTotal();
-                    activeCount++;
-                } else if (res.getStatus() == COMPLETED) {
-                    completedRevenue += res.getTotal();
-                }
+        // If there is no search, show everything in the current view
+        if (searchQuery == "") {
+            for (auto& res : reservationList) {
+                if (res.isPastDate(today.year, today.month, today.day) == showArchive)
+                    filtered.push_back(&res);
             }
+        } else {
+            // If searching, use the helper
+            handleSearch(reservationList, filtered, showArchive, searchQuery);
         }
 
         if (reservationList.empty()) {
             cout << "\n[!] Database is empty. Press Enter to return...";
             cin.ignore(); cin.get(); return;
         }
+        
+        // 2. Sort the  Reservations.
+        reservationListSort(filtered, showArchive, isReverse);
+        
 
-        // 2. Advanced Sorting Logic
-        sort(filtered.begin(), filtered.end(), [&](Reservation* a, Reservation* b) {
-            if (sortByDate) {
-                // Compare Year -> Month -> Day
-                if (a->getYear() != b->getYear()) 
-                    return ascending ? a->getYear() < b->getYear() : a->getYear() > b->getYear();
-                if (a->getMonth() != b->getMonth()) 
-                    return ascending ? a->getMonth() < b->getMonth() : a->getMonth() > b->getMonth();
-                if (a->getDay() != b->getDay()) 
-                    return ascending ? a->getDay() < b->getDay() : a->getDay() > b->getDay();
-            }
-            // Secondary Sort by ID
-            return ascending ? a->getId() < b->getId() : a->getId() > b->getId();
-        });
-
-        // 3. Pagination Math
+        // 3. Pagination
         int totalPages = (filtered.empty()) ? 1 : (filtered.size() + itemsPerPage - 1) / itemsPerPage; ///< Calculates the total number of pages needed to display all filtered reservations based on the defined itemsPerPage. If there are no filtered results, it defaults to 1 page to avoid division by zero and to maintain a consistent user interface. The totalPages variable is used in the pagination logic to determine how many pages of results there are and to control navigation through the pages.
         if (currentPage >= totalPages) currentPage = totalPages - 1;
         if (currentPage < 0) currentPage = 0;
         int startIdx = currentPage * itemsPerPage; ///< Calculates the starting index for the current page of reservations to display. This is determined by multiplying the currentPage number by the itemsPerPage constant. The startIdx variable is used to determine which subset of the filtered reservations should be displayed on the current page, allowing for proper pagination of results.
 
+        // 3. Prevent Pagination Ghosting
+        if (startIdx >= filtered.size() && !filtered.empty()) {
+            startIdx = 0; 
+        }
+
         // 4. UI Header & Dashboard Display
         cout << "================================================================================" << endl;
         cout << "   MANAGE RESERVATIONS | " << (sortByDate ? "Sorting: DATE" : "Sorting: ID") 
-             << " [" << (ascending ? "ASC" : "DESC") << "]" << "   Active: " << activeCount << endl;  
-        cout << "   Page " << currentPage + 1 << " of " << totalPages << " (" << filtered.size() << " results)" << endl;
+             << " [" << (ascending ? "ASC" : "DESC") << "]" << "| Active: " << activeCount << endl;  
+        cout << "   Page " << currentPage + 1 << " of " << totalPages << " (" << filtered.size() << " results) | "; 
+        cout << " VIEW: " << (showArchive ? "ARCHIVE" : "UPCOMING");
+        if (!searchQuery.empty()) cout << " | SEARCH: '" << searchQuery << "'";
+        cout << endl;
         cout << "================================================================================" << endl;
         
         cout << left << setw(6) << "ID" << setw(18) << "Customer" << setw(15) << "Event Date" 
@@ -875,13 +943,24 @@ void manageReservations() {
         if (cmd == "b" || cmd == "B") break;
         else if (cmd == "n" || cmd == "N") { if (currentPage < totalPages - 1) currentPage++; }
         else if (cmd == "p" || cmd == "P") { if (currentPage > 0) currentPage--; }
-        else if (cmd == "t" || cmd == "T") { sortByDate = !sortByDate; currentPage = 0; }
-        else if (cmd == "r" || cmd == "R") { ascending = !ascending; currentPage = 0; }
+        
+        else if (cmd == "t" || cmd == "T") { 
+            showArchive = !showArchive; 
+            isReverse = false; 
+            startIdx = 0; 
+            reservationListSort(filtered, showArchive);
+        }
+
+        else if (cmd == "r" || cmd == "R") { 
+            isReverse = !isReverse; 
+            startIdx = 0; 
+        }
+        
         else if (cmd == "s" || cmd == "S") {
             cout << "Enter Search Query: ";
-            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // CLEAR THE BUFFER HERE
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
             getline(cin, searchQuery);
-            currentPage = 0;
+            startIdx = 0;
         }
         // Finish Event Action
         else if (cmd == "f" || cmd == "F") {
@@ -928,11 +1007,6 @@ void manageReservations() {
                 clearLines(3); // Clear the error message and prompts before asking again
                 continue; // Prompt again after handling the input
             }
-            
-            
-           
-
-           
         }
         // --- Cancel Action ---
         else if (cmd == "c" || cmd == "C") {
@@ -1055,31 +1129,32 @@ void manageReservations() {
  */
 void generateSalesReport() {
     clearscreen();
-    int targetYear;
+    int targetYear; ///< The year requested by the user for financial analysis.
     cout << "====================================================" << endl;
     cout << "           FINANCIAL & SALES REPORT                " << endl;
     cout << "====================================================" << endl;
     cout << "Enter Year to analyze: ";
     
     if (!(cin >> targetYear)) {
-        cin.clear();
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        ERROR("Invalid input. Numeric year only.");
-        cout << "Press Enter to return...";
-        cin.get(); return;
+        handleInputError("Invalid input. Numeric year only.", 0);
+        return;
     }
     cout.imbue(locale::classic());
-    double monthlyRevenue[13] = {0.0}; 
-    int monthlyCount[13] = {0};
-    double totalYearly = 0;
-    int totalEvents = 0;
+    
+    /** @brief Accumulators for monthly and annual data */
+    double monthlyRevenue[13] = {0.0}; ///< Array storing revenue totals indexed by month (1-12).
+    int monthlyCount[13] = {0};       ///< Array storing count of completed events per month.
+    double totalYearly = 0;           ///< Running total of revenue for the entire year.
+    int totalEvents = 0;              ///< Running count of all completed events in the year.
 
-    // Use stringstream to capture the report for potential file export
-    stringstream ss;
+    /** @brief Formatting and Buffer utilities */
+    stringstream ss;    ///< Buffer to capture the report for dual output (Console and File).
+    
+    /// Names of months for tabular display; index 0 is empty to align with 1-based months.
     const string monthNames[] = {"", "January", "February", "March", "April", "May", "June", 
     "July", "August", "September", "October", "November", "December"};
                                 
-    //Header
+    // Header Construction
     ss.imbue(locale::classic()); 
     ss << "====================================================\n";
     ss << "           FINANCIAL & SALES REPORT - " << targetYear << "\n"; // Year: 2026
@@ -1101,7 +1176,7 @@ void generateSalesReport() {
     }
 
     
-    // Display Rows
+    // Report Generation
     for (int i = 1; i <= 12; i++) {
         if (monthlyCount[i] > 0) {
             // Standard columns
@@ -1115,7 +1190,7 @@ void generateSalesReport() {
         }
     }
     
-    //Footer
+    // Footer Construction
     ss.imbue(locale::classic());
     ss << "----------------------------------------------------\n";
     ss << "TOTAL COMPLETED EVENTS: " << totalEvents << "\n";
@@ -1133,8 +1208,8 @@ void generateSalesReport() {
     cout.imbue(locale::classic());
     // Export Option
     cout << "\nWould you like to export this report to a text file? (y/n): ";
-    char choice;
-    cin >> choice;
+    char choice; ///< User's decision for file export.
+    cin >> choice; 
 
     if (tolower(choice) == 'y') {
         string fileName = "Sales_Report_" + to_string(targetYear) + ".txt";
@@ -1177,7 +1252,7 @@ int main() {
         if (!(cin >> choiceInput)) {
             ERROR("Invalid input! Please enter a number.");
             cin.clear();
-            cin.ignore(100, '\n');
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
             cin.get();
             clearscreen();
             continue;
