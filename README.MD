@@ -26,13 +26,14 @@ This program lets users create and manage catering reservations through a menu-d
     - Basic: P250 per guest
     - Premium: P450 per guest
     - Luxury: P600 per guest
-- **Reservation management**
-    - View reservations with filtering and pagination
-    - Search by Name, ID, or Date.
-    - Toggle sorting between Date and ID (Ascending/Descending).
-    - Mark bookings as Completed
-    - Cancel reservations
-    - Delete reservations
+- **Context-Aware Dashboard**
+    - **Upcoming View**: Automatically prioritizes the soonest events to help management prepare for immediate tasks.
+    - **Archive View**: Isolates past reservations for financial auditing and historical lookups.
+    - **Smart Sorting**: Uses a "Pivot Logic" to sort future dates ascending and historical dates descending by default.
+**Advanced Management Tools**
+    - **View Toggle**: Instantly switch between active bookings and archived history.
+    - **Reverse Sort**: A manual override to flip chronological order in any view.
+    - **Contextual Search**: Perform case-insensitive searches that respect the current view (Upcoming/Archive).
 - **Persistent storage**
     - Data is saved to `reservations.csv`
     - Existing reservations are loaded automatically at startup
@@ -61,6 +62,9 @@ This program lets users create and manage catering reservations through a menu-d
 | `currentPage` | `int` | Current page index in the reservation management view. |
 | `itemsPerPage` | `const int` | Number of reservations shown per page (10). |
 | `searchQuery` | `string` | Current search filter used in reservation management. |
+| `showArchive` | `bool` | Toggle state for viewing past history vs. upcoming events. |
+| `isReverse` | `bool` | Toggle state for reversing the chronological sort order. |
+| `startIdx` | `int` | Pointer for pagination logic (tracks the first item displayed on the current page). |
 
 ## 🏷️ Class Summary
 
@@ -101,13 +105,18 @@ This program lets users create and manage catering reservations through a menu-d
 | `INFO(string message)` | `void` | Displays a blue informational message. |
 | `WARNING(string message)` | `void` | Displays a yellow warning message. |
 | `ERROR(string message)` | `void` | Displays a red error message. |
-| `saveToFile()` | `void` | Saves the current reservation list to `reservations.csv`. |
-| `loadFromFile()` | `void` | Loads reservations from `reservations.csv` into memory. |
-| `displayMenu()` | `void` | Prints the main menu options to the console. |
-| `makeReservation()` | `void` | Handles user input and validation to create a new reservation. |
-| `manageReservations()` | `void` | Allows searching, pagination, status updates, cancellations, and deletion of reservations. |
-| `generateSalesReport()` | `void` | Business Intelligence module with stringstream-based file export. |
-| `main()` | `int` | Program entry point; initializes data and runs the main menu loop. |
+| `handleInputError(msg, n)` | `void` | Unified utility to reset buffer, show error, and clear lines. |
+| `reservationListSort(...)` | `void` | Context-aware sorting engine for Upcoming/Archive views. |
+| `handleSearch(...)` | `void` | View-locked search engine for case-insensitive name filtering. |
+
+### 📂 Core Modules
+| Function | Return Type | Description |
+| --- | --- | --- |
+| `saveToFile()` | `void` | Serializes the vector to `reservations.csv`. |
+| `loadFromFile()` | `void` | Deserializes CSV data into the application memory on startup. |
+| `makeReservation()` | `void` | Logic-gate for new bookings (Date, Capacity, and Guest validation). |
+| `manageReservations()` | `void` | The main dashboard controller; manages view states and user commands. |
+| `generateSalesReport()` | `void` | Business Intelligence module that exports financial performance to `.txt`. |
 
 ## 📁 Files
 
@@ -153,12 +162,13 @@ catering_system.exe
 - The program uses ANSI color codes for success, warning, and error messages.
 - Reservations are assigned IDs starting from `1001`.
 - When navigating the **Manage Reservations** screen, use the single-letter commands displayed at the bottom:
-  * **[N]**: Next Page.
-  * **[P]**: Next Page.
-  * **[S]**: Opens the search bar.
-  * **[T]**: Flips the sort between Date and ID.
+  * **[N/P]**: Page Navigation.
+  * **[S]**: Search (Filter names within the current view).
+  * **[T]**: Toggle View (Switch between Upcoming and Archive)
+  * **[R]**: Reverse Sort (Flip Ascending/Descending).
   * **[F]**: Marks an event as done (Completed).
   * **[D]**: Permanently removes a record.
+  * **[B]**: Back to Main Menu.
 
 ## 👨‍💻 Author
 - **Jerlo F. De Leon** 
