@@ -441,6 +441,95 @@ public:
  */
 vector<Reservation> reservationList;
 
+// --- File I/O Functions ---
+
+/**
+ * @brief Saves all reservations to a CSV file.
+ *
+ * @details
+ * Iterates through the reservation list and writes each reservation's
+ * data into a file named "reservations.csv" in comma-separated format.
+ *
+ * Each row contains:
+ * ID, Name, Year, Month, Day, Package, Guests, Status
+ *
+ * @note Existing file content will be overwritten.
+ * @warning If the file cannot be opened, the function silently exits.
+ * @return void
+ *
+ */
+void saveToFile() {
+    ofstream outFile("reservations.csv"); ///< Output file stream for writing reservation data to "reservations.csv". The file is opened in write mode, which will overwrite any existing content. If the file cannot be opened (e.g., due to permissions issues or disk errors), the function will exit without saving any data, and no error message will be displayed.
+    if (!outFile) {
+        ERROR("Unable to open file for saving. Changes will not be saved.");
+        return;
+    };
+
+    // Write header
+    outFile << "ID,Name,Year,Month,Day,Package,Guests,Status" << endl;
+
+
+    for (const auto& res : reservationList) {
+        outFile << res.getId() << ","
+                << res.getName() << ","
+                << res.getYear() << ","
+                << res.getMonth() << ","
+                << res.getDay() << ","
+                << res.getPackage() << ","
+                << res.getGuests() << ","
+                << res.getStatusString(res.getStatus()) << endl;
+    }
+    outFile.close();
+}
+
+/**
+ * @brief Loads reservations from a CSV file into the reservation list.
+ *
+ * @details
+ * Reads from "reservations.csv" and parses each line to create Reservation objects,
+ * which are then added to the global reservation list.
+ *
+ * The function handles potential parsing errors gracefully by skipping malformed lines.
+ *
+ * @warning If the file cannot be opened, the function silently exits, leaving the reservation list empty.
+ * @return void
+ */
+void loadFromFile() {
+    ifstream inFile("reservations.csv"); ///< Input file stream for reading reservation data from "reservations.csv". The file is opened in read mode. If the file cannot be opened (e.g., if it does not exist, or due to permissions issues), the function will exit without loading any data, and the reservation list will remain empty.
+    if (!inFile) {
+        WARNING("No existing database found. Starting with an empty list.");
+        return;
+    };
+
+    reservationList.clear();
+    string line; ///< Temporary variable to hold each line read from the CSV file. This variable is used in the while loop to read the file line by line. Each line is expected to contain the reservation data in a comma-separated format, which will be parsed to create Reservation objects. If a line is malformed or cannot be parsed correctly, it will be skipped, and the function will continue reading the next line until the end of the file is reached.
+    getline(inFile, line); // Skip the header row
+    while (getline(inFile, line)) {
+        stringstream ss(line); 
+        string temp, name, status; ///< Temporary variables for parsing reservation data from the CSV file. The 'temp' variable is used for intermediate string storage when parsing integer values, while 'name' and 'status' are used to store the customer's name and reservation status as strings. The 'id', 'y', 'm', 'd', 'pkg', and 'guests' variables are used to hold the parsed integer values for the reservation's ID, year, month, day, package type, and number of guests, respectively. These variables are essential for creating a Reservation object after successfully parsing a line from the CSV file.
+        int id, y, m, d, pkg, guests; ///< Variables to hold parsed data for each reservation. These variables are used to temporarily store the values read from the CSV file before creating a Reservation object. The 'temp' variable is used for intermediate string storage when parsing integer values, while 'name' and 'status' are used to store the customer's name and reservation status as strings.
+
+        try {
+            int statusInt; ///< Temporary variable to hold the integer representation of the reservation status parsed from the CSV file. This variable is used to convert the string representation of the status back into the ReservationStatus enum type when creating a Reservation object. The function expects the status in the CSV file to be stored as an integer corresponding to the enum values (e.g., 1 for CONFIRMED, 2 for COMPLETED, 3 for CANCELLED). If the status cannot be parsed correctly, it may lead to an invalid ReservationStatus value being set for the reservation.
+
+            getline(ss, temp, ','); id = stoi(temp);
+            getline(ss, name, ',');
+            getline(ss, temp, ','); y = stoi(temp);
+            getline(ss, temp, ','); m = stoi(temp);
+            getline(ss, temp, ','); d = stoi(temp);
+            getline(ss, temp, ','); pkg = stoi(temp);
+            getline(ss, temp, ','); guests = stoi(temp);
+            getline(ss, status); statusInt = "Confirmed" == status ? 1 : ("Completed" == status ? 2 : ("Cancelled" == status ? 3 : 0));
+
+            Reservation res(id, name, y, m, d, pkg, guests);
+            res.setStatus(static_cast<ReservationStatus>(statusInt));
+            reservationList.push_back(res);
+        } catch (const exception& e) { continue; }
+    }
+    inFile.close();
+}
+//--- End of File I/O Functions ---
+
 /**
  * @brief Sorts a filtered list of reservations based on the active view and direction.
  * * @details This function implements a contextual sorting strategy.
@@ -507,88 +596,137 @@ void handleSearch(const vector<Reservation>& fullList, vector<Reservation*>& fil
     }
 }
 
-// --- File I/O Functions ---
-
 /**
- * @brief Saves all reservations to a CSV file.
- *
+ * @brief Logic to mark a specific reservation as COMPLETED by ID.
  * @details
- * Iterates through the reservation list and writes each reservation's
- * data into a file named "reservations.csv" in comma-separated format.
- *
- * Each row contains:
- * ID, Name, Year, Month, Day, Package, Guests, Status
- *
- * @note Existing file content will be overwritten.
- * @warning If the file cannot be opened, the function silently exits.
+ * This function prompts the user to enter a reservation ID to mark as completed. It validates the
+ * input to ensure it is numeric and corresponds to an existing reservation. If the reservation is found and its status is currently CONFIRMED, it updates the status to COMPLETED and saves the changes to the file. If the reservation is not found or if it cannot be marked as completed (e.g., if it is already completed or cancelled), appropriate messages are displayed to the user. The function continues to prompt for IDs until the user enters '0' to cancel the operation.
+ * @warning This function assumes that the reservation IDs are unique and that the reservation list is properly
+ * loaded from the file before this function is called. It also assumes that the user will enter valid numeric input for the reservation ID. If invalid input is entered, the function will handle it gracefully by displaying an error message and prompting the user to try again.
  * @return void
- *
  */
-void saveToFile() {
-    ofstream outFile("reservations.csv"); ///< Output file stream for writing reservation data to "reservations.csv". The file is opened in write mode, which will overwrite any existing content. If the file cannot be opened (e.g., due to permissions issues or disk errors), the function will exit without saving any data, and no error message will be displayed.
-    if (!outFile) return;
+void handleFinishEvent() {
+    int fid;
+    while(true) {
+        cout << "Enter ID to mark as COMPLETED (Enter '0' to cancel): ";
+        if (!(cin >> fid) || cin.peek() != '\n') {
+            handleInputError("Invalid ID format. Numeric only.");
+            clearLines(3);
+            continue;
+        }
 
-    // Write header
-    outFile << "ID,Name,Year,Month,Day,Package,Guests,Status" << endl;
+        if (fid == 0) break;
 
+        auto it = find_if(reservationList.begin(), reservationList.end(), [&](const Reservation& r) {
+            return r.getId() == fid;
+        });
 
-    for (const auto& res : reservationList) {
-        outFile << res.getId() << ","
-                << res.getName() << ","
-                << res.getYear() << ","
-                << res.getMonth() << ","
-                << res.getDay() << ","
-                << res.getPackage() << ","
-                << res.getGuests() << ","
-                << res.getStatusString(res.getStatus()) << endl;
+        if (it != reservationList.end()) {
+            if (it->getStatus() == CONFIRMED) {
+                it->setStatus(COMPLETED);
+                saveToFile();
+                SUCCESS("ID " + to_string(fid) + " marked as Completed!");
+            } else {
+                WARNING("Only 'Confirmed' bookings can be marked as 'Completed'.");
+            }
+        } else {
+            ERROR("ID " + to_string(fid) + " not found.");
+        }
+        
+        cout << "Press Enter to continue...";
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.get();
+        clearLines(3);
     }
-    outFile.close();
 }
 
 /**
- * @brief Loads reservations from a CSV file into the reservation list.
- *
+ * @brief Logic to mark a specific reservation as CANCELLED by ID.
  * @details
- * Reads from "reservations.csv" and parses each line to create Reservation objects,
- * which are then added to the global reservation list.
- *
- * The function handles potential parsing errors gracefully by skipping malformed lines.
- *
- * @warning If the file cannot be opened, the function silently exits, leaving the reservation list empty.
+ * This function prompts the user to enter a reservation ID to cancel. It validates the input to ensure it is numeric and corresponds to an existing reservation. If the reservation is found and its status is not already CANCELLED, it updates the status to CANCELLED and saves the changes to the file. If the reservation is not found or if it is already cancelled, appropriate messages are displayed to the user. The function continues to prompt for IDs until the user enters '0' to cancel the operation.
+ * @warning This function assumes that the reservation IDs are unique and that the reservation list is properly loaded from the file before this function is called. It also assumes that the user will enter valid numeric input for the reservation ID. If invalid input is entered, the function will handle it gracefully by displaying an error message and prompting the user to try again.
  * @return void
  */
-void loadFromFile() {
-    ifstream inFile("reservations.csv"); ///< Input file stream for reading reservation data from "reservations.csv". The file is opened in read mode. If the file cannot be opened (e.g., if it does not exist, or due to permissions issues), the function will exit without loading any data, and the reservation list will remain empty.
-    if (!inFile) return;
+void handleCancelEvent() {
+    int cid;
+    while(true) {
+        cout << "Enter ID to Cancel (Enter '0' to cancel): ";
+        if (!(cin >> cid) || cin.peek() != '\n') {
+            handleInputError("Numeric only! Enter ID: ");
+            clearLines(3);
+            continue;
+        }
 
-    reservationList.clear();
-    string line; ///< Temporary variable to hold each line read from the CSV file. This variable is used in the while loop to read the file line by line. Each line is expected to contain the reservation data in a comma-separated format, which will be parsed to create Reservation objects. If a line is malformed or cannot be parsed correctly, it will be skipped, and the function will continue reading the next line until the end of the file is reached.
-    getline(inFile, line); // Skip the header row
-    while (getline(inFile, line)) {
-        stringstream ss(line); 
-        string temp, name, status; ///< Temporary variables for parsing reservation data from the CSV file. The 'temp' variable is used for intermediate string storage when parsing integer values, while 'name' and 'status' are used to store the customer's name and reservation status as strings. The 'id', 'y', 'm', 'd', 'pkg', and 'guests' variables are used to hold the parsed integer values for the reservation's ID, year, month, day, package type, and number of guests, respectively. These variables are essential for creating a Reservation object after successfully parsing a line from the CSV file.
-        int id, y, m, d, pkg, guests; ///< Variables to hold parsed data for each reservation. These variables are used to temporarily store the values read from the CSV file before creating a Reservation object. The 'temp' variable is used for intermediate string storage when parsing integer values, while 'name' and 'status' are used to store the customer's name and reservation status as strings.
+        if (cid == 0) break;
 
-        try {
-            int statusInt; ///< Temporary variable to hold the integer representation of the reservation status parsed from the CSV file. This variable is used to convert the string representation of the status back into the ReservationStatus enum type when creating a Reservation object. The function expects the status in the CSV file to be stored as an integer corresponding to the enum values (e.g., 1 for CONFIRMED, 2 for COMPLETED, 3 for CANCELLED). If the status cannot be parsed correctly, it may lead to an invalid ReservationStatus value being set for the reservation.
+        auto it = find_if(reservationList.begin(), reservationList.end(), [&](const Reservation& r) {
+            return r.getId() == cid;
+        });
 
-            getline(ss, temp, ','); id = stoi(temp);
-            getline(ss, name, ',');
-            getline(ss, temp, ','); y = stoi(temp);
-            getline(ss, temp, ','); m = stoi(temp);
-            getline(ss, temp, ','); d = stoi(temp);
-            getline(ss, temp, ','); pkg = stoi(temp);
-            getline(ss, temp, ','); guests = stoi(temp);
-            getline(ss, status); statusInt = "Confirmed" == status ? 1 : ("Completed" == status ? 2 : ("Cancelled" == status ? 3 : 0));
+        if (it != reservationList.end()) {
+            if (it->getStatus() != CANCELLED) {
+                it->setStatus(CANCELLED);
+                saveToFile();
+                SUCCESS("ID " + to_string(cid) + " is now Cancelled.");
+            } else {
+                WARNING("ID " + to_string(cid) + " was already cancelled.");
+            }
+        } else {
+            ERROR("ID " + to_string(cid) + " not found in database.");
+        }
 
-            Reservation res(id, name, y, m, d, pkg, guests);
-            res.setStatus(static_cast<ReservationStatus>(statusInt));
-            reservationList.push_back(res);
-        } catch (const exception& e) { continue; }
+        cout << "Press Enter to continue...";
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.get();
+        clearLines(3);
     }
-    inFile.close();
 }
-//--- End of File I/O Functions ---
+
+/**
+ * @brief Logic to PERMANENTLY DELETE a reservation by ID.
+ * @details
+ * This function prompts the user to enter a reservation ID to delete. It validates the input to ensure it is numeric and corresponds to an existing reservation. If the reservation is found, it asks for confirmation before permanently removing it from the list and saving the changes to the file. If the reservation is not found, an appropriate message is displayed. The function continues to prompt for IDs until the user enters '0' to cancel the operation.
+ * @warning This function assumes that the reservation IDs are unique and that the reservation list is properly loaded from the file before this function is called. It also assumes that the user will enter valid numeric input for the reservation ID. If invalid input is entered, the function will handle it gracefully by displaying an error message and prompting the user to try again.
+ * @return void
+ */
+void handleDeleteEvent() {
+    int did;
+    while(true) {
+        cout << "Enter ID to DELETE (Enter '0' to cancel): ";
+        if (!(cin >> did) || cin.peek() != '\n') {
+            handleInputError("Numeric only! Enter ID to DELETE: ");
+            clearLines(3);
+            continue;
+        }
+
+        if (did == 0) break;
+
+        auto it = find_if(reservationList.begin(), reservationList.end(), [&](const Reservation& r) {
+            return r.getId() == did;
+        });
+
+        if (it != reservationList.end()) {
+            char confirm;
+            WARNING("Are you sure you want to PERMANENTLY delete ID " + to_string(did) + "? (y/n): ");
+            cin >> confirm;
+
+            if (tolower(confirm) == 'y') {
+                reservationList.erase(it);
+                saveToFile();
+                SUCCESS("ID " + to_string(did) + " deleted from database.");
+            } else {
+                INFO("Deletion cancelled.");
+            }
+        } else {
+            ERROR("ID " + to_string(did) + " not found.");
+        }
+
+        cout << "Press Enter to continue...";
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+        cin.get();
+        clearLines(4);
+    }
+}
 
 /**
  * @brief Automatically marks past confirmed reservations as completed.
@@ -651,7 +789,7 @@ int autoCompletePastReservations() {
  * @note This function is the root of the application's control flow. It should be called 
  * within a `while(true)` loop in `main()` to ensure the user returns to this hub after 
  * completing any specific task.
- * * @return void
+ * @return void
  */
 void displayMenu() {
     cout << "\n========================================" << endl;
@@ -933,7 +1071,7 @@ void manageReservations() {
 
         // 6. Navigation & Control Menu
         cout << "--------------------------------------------------------------------------------" << endl;
-        cout << "[N] Next | [P] Prev | [S] Search | [T] Toggle Sort | [R] Reverse Sort" << endl;
+        cout << "[N] Next | [P] Prev | [S] Search | [T] Toggle View | [R] Reverse Sort" << endl;
         cout << "[F] Finish Event | [C] Cancel | [D] Delete | [B] Back to Menu: ";
         
         string cmd;
@@ -964,155 +1102,16 @@ void manageReservations() {
         }
         // Finish Event Action
         else if (cmd == "f" || cmd == "F") {
-            int fid; ///< Temporary variable to hold the reservation ID entered by the user for marking as completed. This variable is used to identify which reservation the user wants to mark as completed, and it is validated to ensure that it corresponds to an existing reservation before allowing the status change to "Completed". The function checks if the reservation is currently confirmed and provides appropriate feedback to the user based on whether the status change was successful or if the specified ID was not found or cannot be marked as completed.
-            
-            while(true) {
-                cout << "Enter ID to mark as COMPLETED (Enter '0' to cancel): ";
-                
-                // Validate that it's actually a number
-                if (!(cin >> fid) || cin.peek() != '\n') {
-                    cin.clear();
-                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                    ERROR("Invalid ID format. Numeric only.");
-                    cout << "Press Enter to try again...";
-                    cin.get();
-                    clearLines(3);
-                    continue; // Prompt again after handling the invalid input
-                }
-
-                if (fid == 0) break; // Allow user to cancel by entering '0' for ID.
-
-                bool found = false; ///< Flag to indicate whether the reservation with the specified ID was found in the reservation list. This variable is used to track whether a matching reservation was located during the search process, allowing the function to provide appropriate feedback to the user (e.g., confirming completion or displaying an error message if the ID is not found).
-
-                /// Search for the reservation by ID
-                for(auto& r : reservationList) {
-                    if(r.getId() == fid) {
-                        found = true;
-                        if(r.getStatus() == CONFIRMED) {
-                            r.setStatus(COMPLETED);
-                            saveToFile();
-                            SUCCESS("ID " + to_string(fid) + " marked as Completed!");
-                        } else {
-                            WARNING("Only 'Confirmed' bookings can be marked as 'Completed'.");
-                        }
-                        break;
-                    }
-                }
-
-                // If not found, show error message
-                if(!found) ERROR("ID " + to_string(fid) + " not found.");
-                cout << "Press Enter to continue...";
-                cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                cin.get();
-                clearLines(3); // Clear the error message and prompts before asking again
-                continue; // Prompt again after handling the input
-            }
+            handleFinishEvent(); // Calls a separate function to handle the completion of reservations, which includes input validation and confirmation prompts to ensure that the user intends to mark the specified reservation as completed. This function will manage the process of identifying the reservation by ID, confirming the completion action with the user, and updating the reservation list and file accordingly if the completion is confirmed.
         }
         // --- Cancel Action ---
         else if (cmd == "c" || cmd == "C") {
-            int cid; ///< Temporary variable to hold the reservation ID entered by the user for cancellation. This variable is used to identify which reservation the user wants to cancel, and it is validated to ensure that it corresponds to an existing reservation before allowing the status change to "Cancelled". The function checks if the reservation is already cancelled and provides appropriate feedback to the user.
-            
-            while(true){
-                cout << "Enter ID to Cancel (Enter '0' to cancel): ";
-
-                // Validate that it's actually a number
-                if (!(cin >> cid) || cin.peek() != '\n') {
-                    cin.clear();
-                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                    ERROR("Numeric only! Enter ID: ");
-                    cout << "Press Enter to try again...";
-                    cin.get();
-                    clearLines(3); // Clears the prompt, error, and "Press Enter" lines
-                    continue;
-                }
-
-                if (cid == 0) break; // Allow user to cancel by entering '0' for ID.
-
-                bool found = false; ///< Flag to indicate whether the reservation with the specified ID was found in the reservation list. This variable is used to track whether a matching reservation was located during the search process, allowing the function to provide appropriate feedback to the user (e.g., confirming cancellation or displaying an error message if the ID is not found).
-                
-                // Search for the reservation by ID
-                for(auto& r : reservationList) {
-                    if(r.getId() == cid) {
-                        found = true;
-                        if(r.getStatus() != CANCELLED) {
-                            r.setStatus(CANCELLED);
-                            saveToFile();
-                            SUCCESS("ID " + to_string(cid) + " is now Cancelled.");
-                        } else {
-                            WARNING("ID " + to_string(cid) + " was already cancelled.");
-                        }
-                        break;
-                    }
-                }
-                
-                // If not found, show error message and prompt again
-                if(!found) ERROR("ID " + to_string(cid) + " not found in database.");
-                
-                // After handling the input, prompt again for cancellation or allow exit with '0' to go back to the normal mode.
-                cout << "Press Enter to continue...";
-                cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                cin.get();
-                clearLines(3); // Clear the error message and prompts before asking again
-                continue; // Prompt again after handling the input
-            } 
+            handleCancelEvent(); // Calls a separate function to handle the cancellation of reservations, which includes input validation and confirmation prompts to ensure that the user intends to cancel the specified reservation. This function will manage the process of identifying the reservation by ID, confirming the cancellation action with the user, and updating the reservation list and file accordingly if the cancellation is confirmed.
         }
 
         // --- Delete Action ---
         else if (cmd == "d" || cmd == "D") {
-            int did; ///< Temporary variable to hold the reservation ID entered by the user for deletion. This variable is used to identify which reservation the user wants to delete, and it is validated to ensure that it corresponds to an existing reservation before allowing the deletion. The function includes a confirmation step to prevent accidental deletions, and it provides feedback to the user based on whether the deletion was successful or if the specified ID was not found.
-            
-            while(true) {
-                cout << "Enter ID to DELETE (Enter '0' to cancel): ";
-
-                if (!(cin >> did) || cin.peek() != '\n') {
-                    cin.clear();
-                    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                    ERROR("Numeric only! Enter ID to DELETE: ");
-                    cout << "Press Enter to try again...";
-                    cin.get();
-                    clearLines(3);
-                    continue;
-                }
-
-                if (did == 0) break; // Allow user to cancel by entering '0' for ID.
-
-                // Find the reservation by ID
-                auto it = find_if(reservationList.begin(), reservationList.end(), [&](const Reservation& r) {
-                    return r.getId() == did;
-                });
-
-                // if found, confirm deletion and delete or show error if not found
-                if (it != reservationList.end()) {
-                    char confirm;
-                    WARNING("Are you sure you want to PERMANENTLY delete ID " + to_string(did) + "? (y/n): ");
-                    cin >> confirm;
-
-                    if (tolower(confirm) == 'y') {
-                        reservationList.erase(it);
-                        saveToFile();
-                        SUCCESS("ID " + to_string(did) + " deleted from database.");
-                        
-                    } else {
-                        INFO("Deletion cancelled.");
-                        // After handling the input, prompt again for deletion or allow exit with '0' to go back to the normal mode.
-                        cout << "Press Enter to continue...";
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                        cin.get();
-                        clearLines(5); // Clear the error message and prompts before asking again.
-                        continue; // Prompt again after handling the input
-                    }
-                } else {
-                    ERROR("ID " + to_string(did) + " not found.");
-                }
-                
-                // After handling the input, prompt again for deletion or allow exit with '0' to go back to the normal mode.
-                cout << "Press Enter to continue...";
-                cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                cin.get();
-                clearLines(3); // Clear the error message and prompts before asking again.
-                continue; // Prompt again after handling the input
-            }
-            
+            handleDeleteEvent(); // Calls a separate function to handle the deletion of reservations, which includes input validation and confirmation prompts to ensure that the user intends to delete the specified reservation. This function will manage the process of identifying the reservation by ID, confirming the deletion action with the user, and updating the reservation list and file accordingly if the deletion is confirmed.
         }
     }
 }

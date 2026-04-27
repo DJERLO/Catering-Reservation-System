@@ -58,6 +58,18 @@ This program lets users create and manage catering reservations through a menu-d
 | `ReservationStatus` | `enum` | Reservation states: `CONFIRMED`, `COMPLETED`, `CANCELLED`. |
 | `MenuOption` | `enum` | Main menu options: `MAKE_RESERVATION`, `MANAGE_RESERVATIONS`, `SALES_REPORT`, `EXIT`. |
 | `Color` | `enum` | ANSI text color codes used for terminal feedback. |
+| `eventCount` | `int` | Number of events for a selected date (capacity check). |
+| `currentDailyGuests` | `int` | Total guests already booked for a selected date. |
+| `remaining` | `int` | Remaining guest capacity for a date. |
+| `newId` | `int` | Auto-incremented reservation ID. |
+| `confirmedRevenue` | `double` | Revenue from confirmed reservations (dashboard/statistics). |
+| `completedRevenue` | `double` | Revenue from completed reservations (dashboard/statistics). |
+| `monthlyRevenue` | `double[13]` | Monthly revenue for sales report (index 1-12). |
+| `monthlyCount` | `int[13]` | Monthly completed event count for sales report (index 1-12). |
+| `totalYearly` | `double` | Total annual revenue for sales report. |
+| `totalEvents` | `int` | Total completed events in a year (sales report). |
+| `todayVal` | `long` | Numeric representation of today’s date for sorting. |
+| `sortByDate` | `bool` | Whether sorting is by date or by reservation ID. |
 | `reservationList` | `vector<Reservation>` | In-memory list of all reservations. |
 | `currentPage` | `int` | Current page index in the reservation management view. |
 | `itemsPerPage` | `const int` | Number of reservations shown per page (10). |
@@ -87,11 +99,11 @@ This program lets users create and manage catering reservations through a menu-d
 | `getMonth()` | `int` | Returns the event month. |
 | `getDay()` | `int` | Returns the event day. |
 | `getStatus()` | `int` | Returns the reservation status. |
-| `getStatusString()` | `string` | Converts a ReservationStatus enum to a human-readable string. |
+| `getStatusString(int status)` | `string` | Converts a ReservationStatus enum value to a human-readable string. |
 | `setStatus(ReservationStatus newStatus)` | `void` | Updates the reservation status. |
 | `showReservation()` | `void` | Prints the reservation details in a formatted table row. |
-| `isPastDate(y, m, d)` | `bool` | Compares the event date against a provided reference date. |
-| `getTruncatedCustomerName(size_t)` | `string` | Appends `...` to names exceeding column width for UI stability. |
+| `isPastDate(int currentYear, int currentMonth, int currentDay)` | `bool` | Returns true if the reservation date is before the given reference date. |
+| `getTruncatedCustomerName(size_t width)` | `string` | Returns the customer name, truncated with `...` if it exceeds the specified width. |
 
 ## 🔧 Function Summary
 
@@ -108,6 +120,11 @@ This program lets users create and manage catering reservations through a menu-d
 | `handleInputError(msg, n)` | `void` | Unified utility to reset buffer, show error, and clear lines. |
 | `reservationListSort(...)` | `void` | Context-aware sorting engine for Upcoming/Archive views. |
 | `handleSearch(...)` | `void` | View-locked search engine for case-insensitive name filtering. |
+| `handleFinishEvent()` | `void` | Marks a reservation as completed by ID, with input validation and confirmation. |
+| `handleCancelEvent()` | `void` | Cancels a reservation by ID, with input validation and confirmation. |
+| `handleDeleteEvent()` | `void` | Permanently deletes a reservation by ID, with input validation and confirmation. |
+| `autoCompletePastReservations()` | `int` | Automatically marks past confirmed reservations as completed based on the current date. Returns the number of updated reservations. |
+| `displayMenu()` | `void` | Displays the main menu and navigation options for the system. |
 
 ### 📂 Core Modules
 | Function | Return Type | Description |
