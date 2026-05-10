@@ -581,16 +581,33 @@ void handleSearch(const vector<Reservation>& fullList, vector<Reservation*>& fil
     Date today = getCurrentDate();
     
     // Convert keyword to lowercase for case-insensitive search
-    transform(keyword.begin(), keyword.end(), keyword.begin(), ::tolower);
+    string searchKeyword = keyword; /// Create a copy of the keyword to convert to lowercase without modifying the original input.
+    transform(searchKeyword.begin(), searchKeyword.end(), searchKeyword.begin(), ::tolower);
 
     for (auto& res : const_cast<vector<Reservation>&>(fullList)) {
         string name = res.getName();
         transform(name.begin(), name.end(), name.begin(), ::tolower);
 
+        // Prepare ID for searching (Convert int to string)
+        string idStr = to_string(res.getId());
+        string dateSlash = to_string(res.getMonth()) + "/" + to_string(res.getDay()) + "/" + to_string(res.getYear());
+        string dateDash = to_string(res.getMonth()) + "-" + to_string(res.getDay()) + "-" + to_string(res.getYear());
         bool isPast = res.isPastDate(today.year, today.month, today.day);
+
+        ostringstream oss; // << Create an output string stream
+        // Format date as YYYY-MM-DD with leading zeros for month and day
+        oss << res.getYear() << "-" << setfill('0') << setw(2) << res.getMonth() << "-" << setfill('0') << setw(2) << res.getDay();
+        string dateStandard = oss.str(); // << Convert the formatted date to a string for searching
+
+        // Check if keyword matches Name, ID, or any of our Date formats
+        bool matchesKeyword = (name.find(searchKeyword) != string::npos) || 
+                              (idStr.find(searchKeyword) != string::npos) ||
+                              (dateSlash.find(searchKeyword) != string::npos) ||
+                              (dateDash.find(searchKeyword) != string::npos) ||
+                              (dateStandard.find(searchKeyword) != string::npos);
         
         // Match name AND Match the current View Toggle
-        if (name.find(keyword) != string::npos && isPast == showArchive) {
+        if (matchesKeyword && (isPast == showArchive)) {
             filtered.push_back(&res);
         }
     }
